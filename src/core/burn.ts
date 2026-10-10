@@ -19,6 +19,10 @@ export interface MaterialBurn {
   remainingAllocation: number;
   inventory: number;
   inboundInventory: number;
+  // Stock in the warehouse on the same planet. Only filled by XIT BURN.
+  warehouseInventory?: number;
+  // Stock in the Hortus Station (HRT) warehouse. Only filled by XIT BURN.
+  hrtInventory?: number;
   daysLeft: number;
   type: 'input' | 'output' | 'workforce';
 }

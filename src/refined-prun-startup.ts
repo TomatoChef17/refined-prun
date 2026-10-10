@@ -47,6 +47,18 @@ async function startup() {
 
 async function loadUserData() {
   const userDataKey = 'rp-user-data';
+  const stored = await chrome.storage.local.get(userDataKey);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const userData: any = stored[userDataKey];
+  try {
+    await mergeSyncedNotes(userData);
+    if (userData) {
+      await chrome.storage.local.set({ [userDataKey]: userData });
+      sessionNoteIds = new Set((userData.notes as SyncNote[]).map(x => x.id));
+    }
+  } catch (e) {
+    console.warn('Refined PrUn: notes sync failed on load', e);
+  }
   window.addEventListener('message', async (e: MessageEvent) => {
     if (e.source !== window) {
       return;
@@ -56,10 +68,239 @@ async function loadUserData() {
         [userDataKey]: e.data.userData,
       });
       window.postMessage({ type: 'rp-user-data-saved' }, '*');
+      queueNotesPush(e.data.userData?.notes);
     }
   });
-  const userData = await chrome.storage.local.get(userDataKey);
-  return userData[userDataKey];
+  return userData;
+}
+
+// Notes sync through storage.sync (Firefox Sync / Chrome Sync).
+// Each note is stored as a meta entry plus text chunks, because storage.sync
+// limits the size of one item. Deleted notes are kept as tombstones.
+
+interface SyncNote {
+  id: string;
+  name: string;
+  text: string;
+}
+
+interface SyncNoteMeta {
+  id: string;
+  name: string;
+  updated: number;
+  chunks: number;
+  deleted?: boolean;
+}
+
+type SyncState = Record<string, { sig: string; updated: number }>;
+
+const noteMetaPrefix = 'rp-note:';
+const noteChunkPrefix = 'rp-notec:';
+const syncStateKey = 'rp-notes-sync-state';
+const chunkSize = 2000;
+
+// Short hash of a note, so the local sync state does not duplicate the text.
+function getNoteSignature(note: SyncNote) {
+  const input = note.name + '\u0000' + note.text;
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < input.length; i++) {
+    const c = input.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(36) + (h1 >>> 0).toString(36) + ':' + input.length;
+}
+
+async function getSyncState(): Promise<SyncState> {
+  const stored = await chrome.storage.local.get(syncStateKey);
+  return (stored[syncStateKey] as SyncState | undefined) ?? {};
+}
+
+async function readSyncedNotes() {
+  const all = await chrome.storage.sync.get(null);
+  const metas = new Map<string, SyncNoteMeta>();
+  for (const key of Object.keys(all)) {
+    if (key.startsWith(noteMetaPrefix)) {
+      const meta = all[key] as SyncNoteMeta;
+      metas.set(meta.id, meta);
+    }
+  }
+  const getText = (meta: SyncNoteMeta) => {
+    let text = '';
+    for (let i = 0; i < meta.chunks; i++) {
+      text += (all[`${noteChunkPrefix}${meta.id}:${i}`] as string | undefined) ?? '';
+    }
+    return text;
+  };
+  return { metas, getText };
+}
+
+async function writeSyncedNote(note: SyncNote, updated: number, previousChunks: number) {
+  const items: Record<string, unknown> = {};
+  const chunks = Math.max(1, Math.ceil(note.text.length / chunkSize));
+  for (let i = 0; i < chunks; i++) {
+    items[`${noteChunkPrefix}${note.id}:${i}`] = note.text.slice(
+      i * chunkSize,
+      (i + 1) * chunkSize,
+    );
+  }
+  const meta: SyncNoteMeta = { id: note.id, name: note.name, updated, chunks };
+  items[noteMetaPrefix + note.id] = meta;
+  await chrome.storage.sync.set(items);
+  const extra: string[] = [];
+  for (let i = chunks; i < previousChunks; i++) {
+    extra.push(`${noteChunkPrefix}${note.id}:${i}`);
+  }
+  if (extra.length > 0) {
+    await chrome.storage.sync.remove(extra);
+  }
+}
+
+async function writeSyncedTombstone(id: string, updated: number, previousChunks: number) {
+  const meta: SyncNoteMeta = { id, name: '', updated, chunks: 0, deleted: true };
+  await chrome.storage.sync.set({ [noteMetaPrefix + id]: meta });
+  const chunkKeys: string[] = [];
+  for (let i = 0; i < previousChunks; i++) {
+    chunkKeys.push(`${noteChunkPrefix}${id}:${i}`);
+  }
+  if (chunkKeys.length > 0) {
+    await chrome.storage.sync.remove(chunkKeys);
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function mergeSyncedNotes(userData: any) {
+  const state = await getSyncState();
+  const { metas, getText } = await readSyncedNotes();
+  const localNotes: SyncNote[] = Array.isArray(userData?.notes) ? userData.notes : [];
+  const localById = new Map(localNotes.map(x => [x.id, x]));
+  const now = Date.now();
+  const merged: SyncNote[] = [];
+  const newState: SyncState = {};
+
+  for (const note of localNotes) {
+    const sig = getNoteSignature(note);
+    const known = state[note.id];
+    const changedHere = known === undefined || known.sig !== sig;
+    // A note changed on this PC since the last sync counts as the newest version.
+    const localUpdated = changedHere ? now : known.updated;
+    const remote = metas.get(note.id);
+    const changedThere =
+      remote !== undefined && known !== undefined && remote.updated > known.updated;
+    if (changedHere && changedThere && !remote.deleted) {
+      // Edited on both PCs since the last sync: keep both versions, lose nothing.
+      const remoteText = getText(remote);
+      if (remoteText !== note.text || remote.name !== note.name) {
+        const copy = {
+          id: `${note.id}-${remote.updated}`,
+          name: `${remote.name} (other PC)`,
+          text: remoteText,
+        };
+        merged.push(copy);
+        newState[copy.id] = { sig: getNoteSignature(copy), updated: now };
+        await writeSyncedNote(copy, now, 0);
+      }
+      merged.push(note);
+      newState[note.id] = { sig, updated: now };
+      await writeSyncedNote(note, now, remote.chunks);
+      continue;
+    }
+    if (remote && remote.updated > localUpdated) {
+      if (remote.deleted) {
+        newState[note.id] = { sig: '', updated: remote.updated };
+        continue;
+      }
+      const remoteNote = { id: note.id, name: remote.name, text: getText(remote) };
+      merged.push(remoteNote);
+      newState[note.id] = { sig: getNoteSignature(remoteNote), updated: remote.updated };
+      continue;
+    }
+    merged.push(note);
+    newState[note.id] = { sig, updated: localUpdated };
+    if (!remote || remote.updated < localUpdated) {
+      await writeSyncedNote(note, localUpdated, remote?.chunks ?? 0);
+    }
+  }
+
+  for (const remote of metas.values()) {
+    if (localById.has(remote.id) || remote.deleted) {
+      continue;
+    }
+    // Missing on this PC: restore it. A note is only removed by an explicit deletion.
+    const remoteNote = { id: remote.id, name: remote.name, text: getText(remote) };
+    merged.push(remoteNote);
+    newState[remote.id] = { sig: getNoteSignature(remoteNote), updated: remote.updated };
+  }
+
+  if (userData) {
+    userData.notes = merged;
+  }
+  await chrome.storage.local.set({ [syncStateKey]: newState });
+}
+
+let pendingNotes: SyncNote[] | undefined;
+let pushTimer: ReturnType<typeof setTimeout> | undefined;
+// Notes this tab has seen. Only a note that disappears from this set was deleted by the user
+// in this tab. Other tabs or PCs never cause a deletion.
+let sessionNoteIds: Set<string> | undefined;
+const deletedInSession = new Set<string>();
+
+function queueNotesPush(notes: SyncNote[] | undefined) {
+  if (!Array.isArray(notes)) {
+    return;
+  }
+  const ids = new Set(notes.map(x => x.id));
+  if (sessionNoteIds) {
+    for (const id of sessionNoteIds) {
+      if (!ids.has(id)) {
+        deletedInSession.add(id);
+      }
+    }
+  }
+  for (const id of ids) {
+    deletedInSession.delete(id);
+  }
+  sessionNoteIds = ids;
+  pendingNotes = notes;
+  if (pushTimer !== undefined) {
+    clearTimeout(pushTimer);
+  }
+  // Wait until typing stops, to stay far below the storage.sync write limits.
+  pushTimer = setTimeout(async () => {
+    pushTimer = undefined;
+    try {
+      await pushNotes();
+    } catch (e) {
+      console.warn('Refined PrUn: notes sync failed on save', e);
+    }
+  }, 5000);
+}
+
+async function pushNotes() {
+  const notes = pendingNotes;
+  if (!notes) {
+    return;
+  }
+  const state = await getSyncState();
+  const { metas } = await readSyncedNotes();
+  const now = Date.now();
+  for (const note of notes) {
+    const sig = getNoteSignature(note);
+    if (state[note.id]?.sig === sig) {
+      continue;
+    }
+    await writeSyncedNote(note, now, metas.get(note.id)?.chunks ?? 0);
+    state[note.id] = { sig, updated: now };
+  }
+  for (const id of deletedInSession) {
+    await writeSyncedTombstone(id, now, metas.get(id)?.chunks ?? 0);
+    state[id] = { sig: '', updated: now };
+  }
+  deletedInSession.clear();
+  await chrome.storage.local.set({ [syncStateKey]: state });
 }
 
 async function waitDocumentReady() {

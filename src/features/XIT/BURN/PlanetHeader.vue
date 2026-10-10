@@ -3,7 +3,7 @@ import DaysCell from '@src/features/XIT/BURN/DaysCell.vue';
 import { showBuffer } from '@src/infrastructure/prun-ui/buffers';
 import PrunButton from '@src/components/PrunButton.vue';
 import { PlanetBurn } from '@src/core/burn';
-import { countDays } from '@src/features/XIT/BURN/utils';
+import { countDays, countDaysAll } from '@src/features/XIT/BURN/utils';
 import { planetContextMenu } from '@src/components/planet-context-menu/planet-context-menu';
 import { useTileState } from '@src/features/XIT/BURN/tile-state';
 import fa from '@src/utils/font-awesome.module.css';
@@ -25,7 +25,8 @@ const inboundTooltip = computed(() =>
     : 'Excludes inbound cargo. Click to include it.',
 );
 const days = computed(() => countDays(burn.burn));
-const nameColspan = computed(() => (io.value ? 6 : 4));
+const daysAll = computed(() => countDaysAll(burn.burn));
+const nameColspan = computed(() => (io.value ? 7 : 5));
 
 function toggleInbound() {
   excludeInbound.value = includesInbound.value
@@ -57,6 +58,7 @@ function toggleInbound() {
       </button>
     </td>
     <DaysCell :days="days" />
+    <DaysCell :days="daysAll" />
     <td>
       <div :class="$style.buttons">
         <PrunButton dark inline @click="showBuffer(`BS ${burn.naturalId}`)">BS</PrunButton>

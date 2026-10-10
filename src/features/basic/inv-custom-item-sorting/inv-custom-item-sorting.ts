@@ -15,6 +15,7 @@ import { isEmpty } from 'ts-extras';
 import SortCriteria from '@src/features/basic/inv-custom-item-sorting/SortCriteria.vue';
 import { getSortingData } from '@src/store/user-data-sorting';
 import { getInvStore } from '@src/core/store-id';
+import { cxStore, getPrice } from '@src/infrastructure/fio/cx';
 
 function onTileReady(tile: PrunTile) {
   subscribe($$(tile.anchor, C.InventoryView.container), container =>
@@ -79,6 +80,7 @@ async function applyCustomSorting(tile: PrunTile, container: HTMLElement) {
 
   const modes = computed(() => {
     const modes = sortingData.modes.slice();
+    modes.push(priceSortingMode, valueSortingMode);
     if (burn.value) {
       modes.push(burnSortingMode);
     }
@@ -123,6 +125,7 @@ async function applyCustomSorting(tile: PrunTile, container: HTMLElement) {
       catSort.value ? categorySortingMode : activeMode.value,
       burn.value?.burn,
       reverseSort.value,
+      getInvStore(parameter),
     );
     scope.end();
     setTimeout(() => observer.observe(inventory, { childList: true, subtree: true }), 0);
@@ -132,7 +135,13 @@ async function applyCustomSorting(tile: PrunTile, container: HTMLElement) {
   watchEffectWhileNodeAlive(inventory, () => {
     // Touch reactive values.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _ = [sortingData.reverse, sortingData.active, sortingData.cat, burn.value];
+    const _ = [
+      sortingData.reverse,
+      sortingData.active,
+      sortingData.cat,
+      burn.value,
+      cxStore.fetched,
+    ];
     if (first) {
       first = false;
       runSort();
@@ -147,8 +156,14 @@ function sortInventory(
   sorting: UserData.SortingMode | undefined,
   burn: BurnValues | undefined,
   reverse: boolean,
+  store?: PrunApi.Store,
 ) {
   if (!sorting) {
+    return;
+  }
+
+  if (sorting === priceSortingMode || sorting === valueSortingMode) {
+    sortByPrice(inventory, sorting === valueSortingMode, reverse, store);
     return;
   }
 
@@ -237,6 +252,55 @@ function sortInventory(
   }
 }
 
+// Sorts by CX unit price (PRX) or by total stock value, price x amount (VAL).
+// Highest first; clicking again reverses. Prices follow XIT SETTINGS > Pricing.
+function sortByPrice(
+  inventory: Element,
+  byValue: boolean,
+  reverse: boolean,
+  store: PrunApi.Store | undefined,
+) {
+  const amounts = new Map<string, number>();
+  for (const item of store?.items ?? []) {
+    const ticker = item.quantity?.material.ticker;
+    if (ticker) {
+      amounts.set(ticker, (amounts.get(ticker) ?? 0) + (item.quantity?.amount ?? 0));
+    }
+  }
+
+  const items = _$$(inventory, C.GridItemView.container).map(div => {
+    const ticker = _$(div, C.ColoredIcon.label)?.textContent ?? '';
+    const price = getPrice(ticker);
+    let key = -1;
+    if (price !== undefined) {
+      key = byValue ? price * (amounts.get(ticker) ?? 0) : price;
+    }
+    return { div, ticker, key };
+  });
+
+  items.sort((a, b) => (b.key !== a.key ? b.key - a.key : a.ticker.localeCompare(b.ticker)));
+  if (reverse) {
+    items.reverse();
+  }
+  for (const item of items) {
+    inventory.appendChild(item.div);
+  }
+}
+
+const priceSortingMode = {
+  label: 'PRX',
+  categories: [],
+  burn: false,
+  zero: false,
+};
+
+const valueSortingMode = {
+  label: 'VAL',
+  categories: [],
+  burn: false,
+  zero: false,
+};
+
 const categorySortingMode = {
   label: 'CAT',
   categories: [],
@@ -263,4 +327,8 @@ function init() {
   });
 }
 
-features.add(import.meta.url, init, 'INV/SHPI: Adds custom sorting modes to inventories.');
+features.add(
+  import.meta.url,
+  init,
+  'INV/SHPI: Adds custom sorting modes to inventories, including PRX (unit price) and VAL (stock value).',
+);

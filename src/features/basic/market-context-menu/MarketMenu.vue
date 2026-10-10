@@ -18,6 +18,7 @@ const buttons: [string, string][] = [
   ['Orders', 'CXOB'],
   ['Trade', 'CXPO'],
   ['CXM', 'CXM'],
+  ['CONTD', 'CONTD'],
 ];
 </script>
 

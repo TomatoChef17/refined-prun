@@ -63,6 +63,9 @@ const store = reactive({
   },
   showBuffer(cmd: string) {
     this.hideMenu();
+    if (cmd === 'CONTD') {
+      return showBuffer('CONTD');
+    }
     if (cmd === 'CXM') {
       return showBuffer(`CXM ${this.materialID}`);
     } else if (['CXP', 'CXPC', 'CXPO', 'CXOB'].includes(cmd)) {
@@ -94,7 +97,7 @@ async function init() {
     const target = (event.target as HTMLElement).closest<HTMLElement>(materialSelector);
     if (target !== null) {
       event.preventDefault();
-      store.showMenu(event, _$(target, C.ColoredIcon.label)?.textContent ?? '');
+      store.showMenu(event, _$(target, C.ColoredIcon.label)?.textContent?.trim() ?? '');
       return;
     }
     if (isOpen) {

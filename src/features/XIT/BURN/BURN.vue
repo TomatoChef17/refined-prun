@@ -18,7 +18,15 @@ import MaterialRow from '@src/features/XIT/BURN/MaterialRow.vue';
 import { useXitParameters } from '@src/hooks/use-xit-parameters';
 import { materialsStore } from '@src/infrastructure/prun-api/data/materials';
 import { sitesStore } from '@src/infrastructure/prun-api/data/sites';
-import { countDays, getSortedTickers } from '@src/features/XIT/BURN/utils';
+import {
+  BurnSortKey,
+  burnSortNaturalDesc,
+  countDays,
+  getDaysAll,
+  getSortedTickers,
+  getWarehouseAmounts,
+  HRT_NATURAL_ID,
+} from '@src/features/XIT/BURN/utils';
 import InlineFlex from '@src/components/InlineFlex.vue';
 import { findWithQuery } from '@src/utils/find-with-query';
 import { convertToPlanetNaturalId } from '@src/core/planet-natural-id';
@@ -96,11 +104,39 @@ const prod = useTileState('prod');
 const wf = useTileState('wf');
 const io = useTileState('io');
 const excludeInbound = useTileState('excludeInbound');
+const sortBy = useTileState('sortBy');
+const sortDesc = useTileState('sortDesc');
+
+// Click cycle: natural direction -> reversed -> default order.
+function onSortClick(key: BurnSortKey) {
+  if (sortBy.value !== key) {
+    sortBy.value = key;
+    sortDesc.value = burnSortNaturalDesc[key];
+  } else if (sortDesc.value === burnSortNaturalDesc[key]) {
+    sortDesc.value = !sortDesc.value;
+  } else {
+    sortBy.value = '';
+    sortDesc.value = false;
+  }
+}
+
+function sortArrow(key: BurnSortKey) {
+  if (sortBy.value !== key) {
+    return '';
+  }
+  return sortDesc.value ? ' ▼' : ' ▲';
+}
 
 function filterBurn(burn: BurnValues, naturalId: string): BurnValues {
   const filtered: BurnValues = {};
+  const warehouse = getWarehouseAmounts(naturalId);
+  // Read live from the Hortus Station WAR store; reactive, so it refreshes on every change.
+  const hrt = getWarehouseAmounts(HRT_NATURAL_ID);
   for (const ticker of Object.keys(burn)) {
-    const mat = burn[ticker];
+    const mat = {
+      ...withWarehouse(burn[ticker], warehouse[ticker]),
+      hrtInventory: hrt[ticker] ?? 0,
+    };
     const hasProd = mat.input > 0 || mat.output > 0;
     const hasWf = mat.workforce > 0;
     if (!(hasProd && prod.value) && !(hasWf && wf.value)) {
@@ -118,6 +154,15 @@ function filterBurn(burn: BurnValues, naturalId: string): BurnValues {
     }
   }
   return filtered;
+}
+
+// Adds the planet warehouse stock. Without a value, the material is kept as is
+// (the overall section already holds the summed warehouse stock).
+function withWarehouse(mat: MaterialBurn, amount: number | undefined) {
+  if (amount === undefined) {
+    return mat;
+  }
+  return { ...mat, warehouseInventory: amount };
 }
 
 const planetBurn = computed(() => {
@@ -168,6 +213,8 @@ const planetBurn = computed(() => {
       overallBurn[ticker].remainingAllocation += mat.remainingAllocation;
       overallBurn[ticker].inventory += mat.inventory;
       overallBurn[ticker].inboundInventory += mat.inboundInventory;
+      overallBurn[ticker].warehouseInventory =
+        (overallBurn[ticker].warehouseInventory ?? 0) + (mat.warehouseInventory ?? 0);
     }
   }
 
@@ -227,8 +274,8 @@ function onExpandAllClick() {
 function formatBurnTable(burns: PlanetBurn[]) {
   const resupply = userData.settings.burn.resupply;
   const header = io.value
-    ? 'Planet\tTicker\tInv\tIn\tOut\tNet\tNeed\tDays'
-    : 'Planet\tTicker\tInv\tBurn/day\tNeed\tDays';
+    ? 'Planet\tTicker\tInv\tInv HRT\tIn\tOut\tNet\tNeed\tDays\tDays All'
+    : 'Planet\tTicker\tInv\tInv HRT\tBurn/day\tNeed\tDays\tDays All';
   const lines = [header];
   const round = (x: number) => Math.round(x * 1000) / 1000;
   for (const planet of burns) {
@@ -236,8 +283,10 @@ function formatBurnTable(burns: PlanetBurn[]) {
     for (const material of sorted) {
       const mat = planet.burn[material.ticker];
       const days = mat.dailyAmount >= 0 ? '' : Math.floor(mat.daysLeft).toString();
+      const daysAll = mat.dailyAmount >= 0 ? '' : Math.floor(getDaysAll(mat)).toString();
       const burn = round(mat.dailyAmount);
       const inv = mat.inventory + mat.inboundInventory + mat.remainingAllocation;
+      const invHrt = mat.hrtInventory ?? 0;
       const need =
         mat.dailyAmount >= 0 || mat.daysLeft > resupply
           ? 0
@@ -246,10 +295,12 @@ function formatBurnTable(burns: PlanetBurn[]) {
         const inAmt = round(mat.input + mat.workforce);
         const outAmt = round(mat.output);
         lines.push(
-          `${planet.planetName}\t${material.ticker}\t${inv}\t${inAmt}\t${outAmt}\t${burn}\t${need}\t${days}`,
+          `${planet.planetName}\t${material.ticker}\t${inv}\t${invHrt}\t${inAmt}\t${outAmt}\t${burn}\t${need}\t${days}\t${daysAll}`,
         );
       } else {
-        lines.push(`${planet.planetName}\t${material.ticker}\t${inv}\t${burn}\t${need}\t${days}`);
+        lines.push(
+          `${planet.planetName}\t${material.ticker}\t${inv}\t${invHrt}\t${burn}\t${need}\t${days}\t${daysAll}`,
+        );
       }
     }
   }
@@ -301,35 +352,49 @@ function copyBurnTable() {
             {{ anyExpanded ? '-' : '+' }}
           </th>
           <th v-else />
-          <th>
+          <th :class="$style.sortable" @click="onSortClick('inv')">
             <InlineFlex>
-              Inv
+              Inv{{ sortArrow('inv') }}
               <Tooltip
                 position="right"
                 tooltip="Stock at the base plus cargo on inbound ships when enabled. Fractional amount
                  represents the leftover materials since the last workforce consumption event." />
             </InlineFlex>
           </th>
+          <th
+            :class="$style.sortable"
+            data-tooltip="Stock available in your warehouse (WAR) at Hortus Station, updated live."
+            @click="onSortClick('invHrt')">
+            INV HRT{{ sortArrow('invHrt') }}
+          </th>
           <template v-if="io">
             <th>In</th>
             <th>Out</th>
-            <th>Net</th>
+            <th :class="$style.sortable" @click="onSortClick('burn')"
+              >Net{{ sortArrow('burn') }}</th
+            >
           </template>
-          <th v-else>
+          <th v-else :class="$style.sortable" @click="onSortClick('burn')">
             <InlineFlex>
-              Burn
+              Burn{{ sortArrow('burn') }}
               <Tooltip position="bottom" tooltip="How much of a material is consumed per day." />
             </InlineFlex>
           </th>
-          <th>
+          <th :class="$style.sortable" @click="onSortClick('need')">
             <InlineFlex>
-              Need
+              Need{{ sortArrow('need') }}
               <Tooltip
                 position="bottom"
                 tooltip="How much of a material needs to be delivered to be fully supplied." />
             </InlineFlex>
           </th>
-          <th>Days</th>
+          <th :class="$style.sortable" @click="onSortClick('days')">Days{{ sortArrow('days') }}</th>
+          <th
+            :class="$style.sortable"
+            data-tooltip="Days left with the stock of the warehouse on the same planet."
+            @click="onSortClick('daysAll')">
+            Days All{{ sortArrow('daysAll') }}
+          </th>
           <th>CMD</th>
         </tr>
       </thead>
@@ -369,6 +434,11 @@ function copyBurnTable() {
   font-size: 12px;
   padding-left: 18px;
   font-weight: bold;
+}
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
 }
 
 .radioItemWithTooltip {

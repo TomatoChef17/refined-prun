@@ -1,15 +1,114 @@
-import { getMinDaysLeft, PlanetBurn } from '@src/core/burn';
+import {
+  BurnValues,
+  computeNeed,
+  getMinDaysLeft,
+  getResupplyDays,
+  MaterialBurn,
+  PlanetBurn,
+} from '@src/core/burn';
 import { materialsStore } from '@src/infrastructure/prun-api/data/materials';
 import { sortMaterials } from '@src/core/sort-materials';
 import { trunc0, trunc01 } from '@src/utils/format';
 import { userData } from '@src/store/user-data';
+import { warehousesStore } from '@src/infrastructure/prun-api/data/warehouses';
+import { storagesStore } from '@src/infrastructure/prun-api/data/storage';
 
-export function getSortedTickers(burn: PlanetBurn) {
+export type BurnSortKey = 'inv' | 'invHrt' | 'burn' | 'need' | 'days' | 'daysAll';
+
+// Natural ID of Hortus Station, whose warehouse feeds the INV HRT column.
+export const HRT_NATURAL_ID = 'HRT';
+
+// Default direction when a column is first clicked.
+export const burnSortNaturalDesc: Record<BurnSortKey, boolean> = {
+  inv: false,
+  invHrt: true,
+  burn: false,
+  need: true,
+  days: false,
+  daysAll: false,
+};
+
+function getSortValue(mat: MaterialBurn, key: BurnSortKey, naturalId: string) {
+  switch (key) {
+    case 'inv':
+      return mat.inventory + mat.inboundInventory + mat.remainingAllocation;
+    case 'invHrt':
+      return mat.hrtInventory ?? 0;
+    case 'burn':
+      return mat.dailyAmount;
+    case 'need': {
+      const need = computeNeed(mat, getResupplyDays(naturalId || undefined));
+      return isNaN(need) ? 0 : need;
+    }
+    case 'days':
+      return mat.dailyAmount >= 0 ? Number.POSITIVE_INFINITY : mat.daysLeft;
+    case 'daysAll':
+      return getDaysAll(mat);
+  }
+}
+
+export function getSortedTickers(burn: PlanetBurn, sortBy?: string, sortDesc?: boolean) {
   const materials = Object.keys(burn.burn).map(materialsStore.getByTicker);
-  return sortMaterials(materials.filter(x => x !== undefined));
+  const sorted = sortMaterials(materials.filter(x => x !== undefined));
+  if (!sortBy || !(sortBy in burnSortNaturalDesc)) {
+    return sorted;
+  }
+  const key = sortBy as BurnSortKey;
+  const dir = sortDesc ? -1 : 1;
+  // Array.prototype.sort is stable: ties keep the default material order.
+  return sorted.slice().sort((a, b) => {
+    const x = getSortValue(burn.burn[a.ticker], key, burn.naturalId);
+    const y = getSortValue(burn.burn[b.ticker], key, burn.naturalId);
+    if (x === y) {
+      return 0;
+    }
+    return (x < y ? -1 : 1) * dir;
+  });
 }
 
 export const countDays = getMinDaysLeft;
+
+// Material amounts in the warehouse on the given planet.
+export function getWarehouseAmounts(naturalId: string) {
+  const amounts: Record<string, number> = {};
+  if (!naturalId) {
+    return amounts;
+  }
+  const warehouse = warehousesStore.getByEntityNaturalId(naturalId);
+  const store = storagesStore.getById(warehouse?.storeId);
+  for (const item of store?.items ?? []) {
+    const quantity = item.quantity;
+    if (!quantity) {
+      continue;
+    }
+    const ticker = quantity.material.ticker;
+    amounts[ticker] = (amounts[ticker] ?? 0) + quantity.amount;
+  }
+  return amounts;
+}
+
+// Days left when the planet warehouse stock is added to the base stock.
+export function getDaysAll(mat: MaterialBurn) {
+  if (mat.dailyAmount >= 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const total =
+    mat.inventory + mat.inboundInventory + mat.remainingAllocation + (mat.warehouseInventory ?? 0);
+  return total / -mat.dailyAmount;
+}
+
+// Days All of the most urgent net-consumed material.
+export function countDaysAll(burn: BurnValues) {
+  let days = 1000;
+  for (const key of Object.keys(burn)) {
+    const mat = burn[key];
+    if (mat.dailyAmount >= 0) {
+      continue;
+    }
+    days = Math.min(days, getDaysAll(mat));
+  }
+  return days;
+}
 
 export function formatBurnDays(days: number) {
   if (days > 999) {
