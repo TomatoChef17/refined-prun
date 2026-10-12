@@ -45,16 +45,17 @@ const endTime = computed(() => {
   if (!end.value) {
     return undefined;
   }
-  const day = end.value.toLocaleDateString('fr-FR', {
+  const day = end.value.toLocaleDateString('en-GB', {
     weekday: 'short',
     day: '2-digit',
     month: '2-digit',
   });
-  const time = end.value.toLocaleTimeString('fr-FR', {
+  const time = end.value.toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
+    hourCycle: 'h23',
   });
-  return `Fin : ${day} à ${time}`;
+  return `Ends: ${day.replace(',', '')} at ${time}`;
 });
 
 const eta = computed(() => {

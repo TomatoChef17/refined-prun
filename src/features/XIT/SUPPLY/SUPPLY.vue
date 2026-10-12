@@ -41,6 +41,7 @@ const target = useTileState('target');
 const show = useTileState('show');
 const prod = useTileState('prod');
 const wf = useTileState('wf');
+const buyContracts = useTileState('buyContracts');
 const unchecked = useTileState('unchecked');
 
 function targetModel(value: string) {
@@ -78,7 +79,7 @@ function resupplyDaysFor(naturalId: string) {
 function withWarehouse(burn: BurnValues, naturalId: string): BurnValues {
   const warehouse = getWarehouseAmounts(naturalId);
   const partner = getContractInbound(naturalId).totals;
-  const bought = getPurchaseContractInbound(naturalId).totals;
+  const bought = buyContracts.value ? getPurchaseContractInbound(naturalId).totals : {};
   const result: BurnValues = {};
   for (const [ticker, mat] of Object.entries(burn)) {
     const partnerShips = partner[ticker] ?? 0;
@@ -331,6 +332,14 @@ function formatWeight(value: number) {
         data-tooltip="Consumables of the workforce."
         data-tooltip-position="bottom">
         WF
+      </RadioItem>
+      <div :class="$style.separator" />
+      <RadioItem
+        v-model="buyContracts"
+        horizontal
+        data-tooltip="Count goods bought under accepted purchase contracts (BUY) that the seller has not delivered to the base yet. Turn off to ignore them."
+        data-tooltip-position="bottom">
+        BUY CONT
       </RadioItem>
       <div :class="$style.spacer" />
       <PrunButton

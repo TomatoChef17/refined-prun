@@ -114,6 +114,7 @@ const io = useTileState('io');
 const excludeInbound = useTileState('excludeInbound');
 const excludeContractInbound = useTileState('excludeContractInbound');
 const excludePurchaseInbound = useTileState('excludePurchaseInbound');
+const buyContracts = useTileState('buyContracts');
 const managedProduction = useTileState('managedProduction');
 const sortBy = useTileState('sortBy');
 const sortDesc = useTileState('sortDesc');
@@ -176,9 +177,10 @@ function filterBurn(burn: BurnValues, naturalId: string): BurnValues {
     const partnerShips = excludeContractInbound.value.includes(naturalId)
       ? 0
       : (contractInbound.totals[ticker] ?? 0);
-    const purchases = excludePurchaseInbound.value.includes(naturalId)
-      ? 0
-      : (purchaseInbound.totals[ticker] ?? 0);
+    const purchases =
+      !buyContracts.value || excludePurchaseInbound.value.includes(naturalId)
+        ? 0
+        : (purchaseInbound.totals[ticker] ?? 0);
     const inbound = ownShips + partnerShips + purchases;
     const remaining = mat.inventory + inbound + mat.remainingAllocation;
     filtered[ticker] = {
@@ -376,6 +378,15 @@ function copyBurnTable() {
       </RadioItem>
       <div :class="$style.separator" />
       <RadioItem v-model="io" horizontal>I/O</RadioItem>
+      <div :class="$style.separator" />
+      <RadioItem
+        v-model="buyContracts"
+        horizontal
+        :class="$style.radioItemWithTooltip"
+        data-tooltip="Count goods bought under accepted purchase contracts (BUY) that the seller has not delivered to the base yet. Turn off to ignore them."
+        data-tooltip-position="bottom">
+        BUY CONT
+      </RadioItem>
       <div :class="$style.separator" />
       <PrunButton
         dark

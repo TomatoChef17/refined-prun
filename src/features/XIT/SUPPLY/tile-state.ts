@@ -7,6 +7,8 @@ export const useTileState = createTileStateHook({
   show: 'NEED' as string,
   prod: true,
   wf: true,
+  // Count goods bought under purchase contracts, not delivered yet.
+  buyContracts: true,
   // Missing inputs left out of COPY LIST.
   unchecked: [] as string[],
 });

@@ -57,8 +57,11 @@ function toggleContractInbound() {
 
 // Goods sellers deliver here under an accepted purchase contract (blue cart icon).
 const excludePurchaseInbound = useTileState('excludePurchaseInbound');
+const buyContracts = useTileState('buyContracts');
 const purchaseInbound = computed(() => getPurchaseContractInbound(burn.naturalId || undefined));
-const hasPurchaseInbound = computed(() => purchaseInbound.value.lines.length > 0);
+const hasPurchaseInbound = computed(
+  () => buyContracts.value && purchaseInbound.value.lines.length > 0,
+);
 const includesPurchaseInbound = computed(
   () => !excludePurchaseInbound.value.includes(burn.naturalId),
 );
