@@ -29,11 +29,8 @@ const endHour = computed(() => {
   if (!end.value) {
     return undefined;
   }
-  const hour = new Intl.DateTimeFormat('fr-FR', {
-    hour: '2-digit',
-    hourCycle: 'h23',
-  }).format(end.value);
-  return Number(hour);
+  // Local hour from 0 to 23 on the computer clock.
+  return end.value.getHours();
 });
 
 // The deadline falls in the night: nobody is there to fulfill the condition.
@@ -111,8 +108,8 @@ const eta = computed(() => {
 <style module>
 /* The deadline falls between 23:00 and 10:00. */
 .night {
-  background-color: rgba(217, 83, 79, 0.45);
-  color: #fff;
+  background-color: rgba(217, 83, 79, 0.45) !important;
+  color: #fff !important;
 }
 
 .eta {
