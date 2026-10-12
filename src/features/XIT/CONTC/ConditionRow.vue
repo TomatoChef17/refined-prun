@@ -19,8 +19,8 @@ function onFulfillClick(event: MouseEvent) {
 }
 
 // Deadlines are read on the computer clock.
-// Hours when the player sleeps: from 23:00 to 10:00.
-const SLEEP_START = 23;
+// Hours when the player sleeps: from 20:00 to 10:00.
+const SLEEP_START = 20;
 const SLEEP_END = 10;
 
 const end = computed(() => (isFinite(deadline) ? new Date(deadline) : undefined));
@@ -105,7 +105,7 @@ const eta = computed(() => {
 </template>
 
 <style module>
-/* The deadline falls between 23:00 and 10:00. */
+/* The deadline falls between 20:00 and 10:00. */
 .night {
   background-color: rgba(217, 83, 79, 0.45) !important;
   color: #fff !important;
