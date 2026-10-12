@@ -183,4 +183,9 @@ const hrtShort = computed(() => buyAmt.value > 0);
 .fraction {
   color: #999;
 }
+
+/* The whole amount, decimals included, is purple when a partner ship brings some. */
+.partner .fraction {
+  color: inherit;
+}
 </style>
