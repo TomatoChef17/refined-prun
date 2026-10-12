@@ -96,6 +96,24 @@ describe('buildSupplyRows', () => {
     expect(wfOnly.map(x => x.ticker)).toEqual(['RAT']);
   });
 
+  it('adds the reserved amount HRT cannot cover to the missing amount', () => {
+    // 3,169 needed by the base + 21,000 reserved - 12,662 in stock = 11,507 missing.
+    const base: SupplyBase = {
+      naturalId: 'XX-001a',
+      name: 'Base',
+      resupplyDays: 10,
+      burn: { PG: mat({ input: 316.9, dailyAmount: -316.9 }) },
+    };
+    const pg = buildSupplyRows([base], [base], {
+      ...options,
+      hrt: { PG: 12662 },
+      reserved: { PG: 21000 },
+      onOrder: {},
+    }).find(x => x.ticker === 'PG')!;
+    expect(pg.totalNeed).toBe(3169);
+    expect(pg.missing).toBe(11507);
+  });
+
   it('reports no missing amount when HRT covers the need', () => {
     expect(rows.find(x => x.ticker === 'RAT')!.missing).toBe(0);
   });

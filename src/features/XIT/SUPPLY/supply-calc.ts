@@ -34,7 +34,8 @@ export interface SupplyRow {
   hrt: number;
   reserved: number;
   onOrder: number;
-  // HRT stock that can be sent: stock - reserved + on order.
+  // HRT stock left for the bases: stock - reserved + on order. Negative when the
+  // stock does not even cover the contracts I still have to provide.
   available: number;
   missing: number;
   producers: Producer[];
@@ -131,7 +132,7 @@ export function buildSupplyRows(
     row.hrt = options.hrt[row.ticker] ?? 0;
     row.reserved = options.reserved[row.ticker] ?? 0;
     row.onOrder = options.onOrder[row.ticker] ?? 0;
-    row.available = Math.max(0, row.hrt - row.reserved) + row.onOrder;
+    row.available = row.hrt - row.reserved + row.onOrder;
     row.missing = Math.max(0, Math.ceil(row.totalNeed - row.available));
     for (const base of producerBases) {
       const mat = base.burn[row.ticker] as MaterialBurn | undefined;
