@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getShipmentInbound } from './contract-inbound-calc';
+import { getPurchaseInbound, getShipmentInbound } from './contract-inbound-calc';
 
 const at = (id: string) => ({ id }) as unknown as PrunApi.Address;
 const naturalIdOf = (a?: PrunApi.Address | null) => (a as unknown as { id?: string })?.id;
@@ -70,6 +70,53 @@ describe('getShipmentInbound', () => {
 
   it('ignores shipments I deliver myself for someone else', () => {
     expect(getShipmentInbound([shipping('CLOSED', 'PENDING', 'CUSTOMER')], naturalIdOf)).toEqual(
+      {},
+    );
+  });
+});
+
+function purchase(
+  status: PrunApi.ContractStatus,
+  type: PrunApi.ContractConditionType = 'DELIVERY',
+  party: PrunApi.ContractParty = 'PROVIDER',
+  conditionStatus: PrunApi.ContractConditionStatus = 'PENDING',
+): PrunApi.Contract {
+  return {
+    localId: 'GR65BD5',
+    partner: { name: 'Seller' },
+    party: 'CUSTOMER',
+    status,
+    conditions: [
+      cond({ id: 'pay', type: 'PAYMENT', party: 'CUSTOMER' }),
+      cond({
+        id: 'goods',
+        type,
+        party,
+        status: conditionStatus,
+        quantity: qty('SF', 3000),
+        address: at('OZ-189c'),
+      }),
+    ],
+  } as unknown as PrunApi.Contract;
+}
+
+describe('getPurchaseInbound', () => {
+  it('counts goods a seller still has to deliver to my base', () => {
+    expect(getPurchaseInbound([purchase('CLOSED')], naturalIdOf)['OZ-189c'].totals).toEqual({
+      SF: 3000,
+    });
+    expect(
+      getPurchaseInbound([purchase('PARTIALLY_FULFILLED', 'PROVISION')], naturalIdOf)['OZ-189c']
+        .totals,
+    ).toEqual({ SF: 3000 });
+  });
+
+  it('ignores delivered goods, contracts not accepted and my own sales', () => {
+    expect(
+      getPurchaseInbound([purchase('CLOSED', 'DELIVERY', 'PROVIDER', 'FULFILLED')], naturalIdOf),
+    ).toEqual({});
+    expect(getPurchaseInbound([purchase('OPEN')], naturalIdOf)).toEqual({});
+    expect(getPurchaseInbound([purchase('CLOSED', 'DELIVERY', 'CUSTOMER')], naturalIdOf)).toEqual(
       {},
     );
   });

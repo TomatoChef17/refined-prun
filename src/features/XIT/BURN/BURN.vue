@@ -13,7 +13,10 @@ import {
 import { comparePlanets } from '@src/util';
 import BurnSection from '@src/features/XIT/BURN/BurnSection.vue';
 import { useTileState } from '@src/features/XIT/BURN/tile-state';
-import { getContractInbound } from '@src/features/XIT/BURN/contract-inbound';
+import {
+  getContractInbound,
+  getPurchaseContractInbound,
+} from '@src/features/XIT/BURN/contract-inbound';
 import { BURN_COLUMNS, useBurnColumns } from '@src/features/XIT/BURN/columns';
 import PrunButton from '@src/components/PrunButton.vue';
 import Tooltip from '@src/components/Tooltip.vue';
@@ -110,6 +113,8 @@ const wf = useTileState('wf');
 const io = useTileState('io');
 const excludeInbound = useTileState('excludeInbound');
 const excludeContractInbound = useTileState('excludeContractInbound');
+const excludePurchaseInbound = useTileState('excludePurchaseInbound');
+const managedProduction = useTileState('managedProduction');
 const sortBy = useTileState('sortBy');
 const sortDesc = useTileState('sortDesc');
 const showColumnPicker = useTileState('showColumnPicker');
@@ -143,11 +148,25 @@ function filterBurn(burn: BurnValues, naturalId: string): BurnValues {
   const hrt = getWarehouseAmounts(HRT_NATURAL_ID);
   // Overall ('') sums the planets, which already include their partner ships.
   const contractInbound = getContractInbound(naturalId || undefined);
+  const purchaseInbound = getPurchaseContractInbound(naturalId || undefined);
+  // Managed base: someone else supplies the production inputs, so only
+  // workforce consumption (and outputs) count there.
+  const managed = managedProduction.value.includes(naturalId);
   for (const ticker of Object.keys(burn)) {
-    const mat = {
+    let mat = {
       ...withWarehouse(burn[ticker], warehouse[ticker]),
       hrtInventory: hrt[ticker] ?? 0,
     };
+    if (managed) {
+      if (mat.workforce === 0 && mat.output === 0) {
+        continue;
+      }
+      mat = {
+        ...mat,
+        input: 0,
+        dailyAmount: clampNearZeroDailyAmount(mat.output - mat.workforce),
+      };
+    }
     const hasProd = mat.input > 0 || mat.output > 0;
     const hasWf = mat.workforce > 0;
     if (!(hasProd && prod.value) && !(hasWf && wf.value)) {
@@ -157,12 +176,16 @@ function filterBurn(burn: BurnValues, naturalId: string): BurnValues {
     const partnerShips = excludeContractInbound.value.includes(naturalId)
       ? 0
       : (contractInbound.totals[ticker] ?? 0);
-    const inbound = ownShips + partnerShips;
+    const purchases = excludePurchaseInbound.value.includes(naturalId)
+      ? 0
+      : (purchaseInbound.totals[ticker] ?? 0);
+    const inbound = ownShips + partnerShips + purchases;
     const remaining = mat.inventory + inbound + mat.remainingAllocation;
     filtered[ticker] = {
       ...mat,
       inboundInventory: inbound,
       contractInventory: partnerShips,
+      purchaseInventory: purchases,
       daysLeft: mat.dailyAmount >= 0 ? Number.POSITIVE_INFINITY : remaining / -mat.dailyAmount,
     };
   }

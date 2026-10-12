@@ -79,3 +79,44 @@ export function getShipmentInbound(
   }
   return result;
 }
+
+// Partner conditions that bring goods to a place: delivered there, or provided there for me.
+const PURCHASE_TYPES = new Set<string>(['DELIVERY', 'PROVISION']);
+
+// Planet natural id -> goods a partner still has to deliver or provide there
+// under an accepted purchase contract (I am the buyer).
+export function getPurchaseInbound(
+  contracts: PrunApi.Contract[],
+  naturalIdOf: (address?: PrunApi.Address | null) => string | undefined,
+): Record<string, ContractInbound> {
+  const result: Record<string, ContractInbound> = {};
+  for (const contract of contracts) {
+    if (!ACTIVE.has(contract.status)) {
+      continue;
+    }
+    for (const condition of contract.conditions) {
+      if (
+        !PURCHASE_TYPES.has(condition.type) ||
+        condition.party === contract.party ||
+        condition.status === 'FULFILLED'
+      ) {
+        continue;
+      }
+      const quantity = condition.quantity;
+      const planet = naturalIdOf(condition.address);
+      if (!quantity || quantity.amount <= 0 || !planet) {
+        continue;
+      }
+      const ticker = quantity.material.ticker;
+      const entry = (result[planet] ??= { totals: {}, lines: [] });
+      entry.totals[ticker] = (entry.totals[ticker] ?? 0) + quantity.amount;
+      entry.lines.push({
+        contract: contract.localId,
+        partner: contract.partner.name,
+        ticker,
+        amount: quantity.amount,
+      });
+    }
+  }
+  return result;
+}

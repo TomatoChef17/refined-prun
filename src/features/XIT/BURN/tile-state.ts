@@ -11,6 +11,11 @@ export const useTileState = createTileStateHook({
   excludeInbound: [] as string[],
   // Planets where partner ships (shipping contracts) are not counted.
   excludeContractInbound: [] as string[],
+  // Planets where goods bought under purchase contracts are not counted.
+  excludePurchaseInbound: [] as string[],
+  // Planets whose production inputs are supplied by someone else (managed bases):
+  // only workforce materials count there.
+  managedProduction: [] as string[],
   expand: [] as string[],
   sortBy: '' as string,
   sortDesc: false,

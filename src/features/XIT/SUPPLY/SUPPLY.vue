@@ -19,7 +19,10 @@ import {
   getWarehouseAmounts,
   HRT_NATURAL_ID,
 } from '@src/features/XIT/BURN/utils';
-import { getContractInbound } from '@src/features/XIT/BURN/contract-inbound';
+import {
+  getContractInbound,
+  getPurchaseContractInbound,
+} from '@src/features/XIT/BURN/contract-inbound';
 import { useTileState } from './tile-state';
 import ReserveCell from './ReserveCell.vue';
 import {
@@ -75,14 +78,17 @@ function resupplyDaysFor(naturalId: string) {
 function withWarehouse(burn: BurnValues, naturalId: string): BurnValues {
   const warehouse = getWarehouseAmounts(naturalId);
   const partner = getContractInbound(naturalId).totals;
+  const bought = getPurchaseContractInbound(naturalId).totals;
   const result: BurnValues = {};
   for (const [ticker, mat] of Object.entries(burn)) {
     const partnerShips = partner[ticker] ?? 0;
+    const purchases = bought[ticker] ?? 0;
     result[ticker] = {
       ...mat,
       warehouseInventory: warehouse[ticker] ?? 0,
-      inboundInventory: mat.inboundInventory + partnerShips,
+      inboundInventory: mat.inboundInventory + partnerShips + purchases,
       contractInventory: partnerShips,
+      purchaseInventory: purchases,
     };
   }
   return result;

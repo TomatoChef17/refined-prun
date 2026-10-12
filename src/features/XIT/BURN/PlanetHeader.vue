@@ -7,7 +7,10 @@ import { countDays, countDaysAll } from '@src/features/XIT/BURN/utils';
 import { planetContextMenu } from '@src/components/planet-context-menu/planet-context-menu';
 import { useTileState } from '@src/features/XIT/BURN/tile-state';
 import { useBurnColumns } from '@src/features/XIT/BURN/columns';
-import { getContractInbound } from '@src/features/XIT/BURN/contract-inbound';
+import {
+  getContractInbound,
+  getPurchaseContractInbound,
+} from '@src/features/XIT/BURN/contract-inbound';
 import fa from '@src/utils/font-awesome.module.css';
 
 const { burn } = defineProps<{
@@ -52,6 +55,44 @@ function toggleContractInbound() {
     : excludeContractInbound.value.filter(x => x !== burn.naturalId);
 }
 
+// Goods sellers deliver here under an accepted purchase contract (blue cart icon).
+const excludePurchaseInbound = useTileState('excludePurchaseInbound');
+const purchaseInbound = computed(() => getPurchaseContractInbound(burn.naturalId || undefined));
+const hasPurchaseInbound = computed(() => purchaseInbound.value.lines.length > 0);
+const includesPurchaseInbound = computed(
+  () => !excludePurchaseInbound.value.includes(burn.naturalId),
+);
+const purchaseInboundTooltip = computed(() => {
+  const lines = purchaseInbound.value.lines.map(
+    x => `${x.contract} ${x.partner}: ${x.amount} ${x.ticker}`,
+  );
+  const action = includesPurchaseInbound.value
+    ? 'Counted in Inv and Days. Click to exclude it.'
+    : 'Not counted. Click to include it.';
+  return `Bought, not delivered yet (purchase contracts): ${lines.join(' · ')} — ${action}`;
+});
+
+function togglePurchaseInbound() {
+  excludePurchaseInbound.value = includesPurchaseInbound.value
+    ? [...excludePurchaseInbound.value, burn.naturalId]
+    : excludePurchaseInbound.value.filter(x => x !== burn.naturalId);
+}
+
+// Managed base: someone else supplies the production inputs.
+const managedProduction = useTileState('managedProduction');
+const isManaged = computed(() => managedProduction.value.includes(burn.naturalId));
+const managedTooltip = computed(() =>
+  isManaged.value
+    ? 'Managed production: inputs are supplied by someone else, so they are ignored here. Only workforce materials count in Days. Click to count production inputs again.'
+    : 'Production inputs are counted. Click if someone else supplies this base (managed base): only workforce materials will count in Days.',
+);
+
+function toggleManaged() {
+  managedProduction.value = isManaged.value
+    ? managedProduction.value.filter(x => x !== burn.naturalId)
+    : [...managedProduction.value, burn.naturalId];
+}
+
 function toggleInbound() {
   excludeInbound.value = includesInbound.value
     ? [...excludeInbound.value, burn.naturalId]
@@ -70,6 +111,17 @@ function toggleInbound() {
         {{ minimized ? '+' : '-' }}
       </span>
       <span>{{ burn.planetName }}</span>
+      <button
+        v-if="burn.naturalId"
+        type="button"
+        :class="[$style.managed, { [$style.managedOn]: isManaged }]"
+        :data-tooltip="managedTooltip"
+        :aria-label="managedTooltip"
+        :aria-pressed="isManaged"
+        @click.stop="toggleManaged">
+        <span :class="fa.solid">{{ '\uf275' }}</span>
+        {{ isManaged ? 'PROD MANAGED' : '' }}
+      </button>
       <button
         v-if="hasInboundShips"
         type="button"
@@ -94,6 +146,21 @@ function toggleInbound() {
         :aria-pressed="includesContractInbound"
         @click.stop="toggleContractInbound">
         {{ '\uf135' }}
+      </button>
+      <button
+        v-if="hasPurchaseInbound"
+        type="button"
+        :class="[
+          fa.solid,
+          $style.inbound,
+          $style.purchase,
+          { [$style.inboundExcluded]: !includesPurchaseInbound },
+        ]"
+        :data-tooltip="purchaseInboundTooltip"
+        :aria-label="purchaseInboundTooltip"
+        :aria-pressed="includesPurchaseInbound"
+        @click.stop="togglePurchaseInbound">
+        {{ '\uf07a' }}
       </button>
     </td>
     <DaysCell v-if="show.days" :days="days" />
@@ -144,6 +211,31 @@ function toggleInbound() {
 .partnerShip {
   color: #b57edc;
   margin-right: 6px;
+}
+
+/* Goods bought under a purchase contract: blue cart. */
+.purchase {
+  color: #3fa2de;
+  margin-right: 6px;
+}
+
+/* Managed production toggle, next to the planet name. */
+.managed {
+  margin-left: 8px;
+  border: 0;
+  padding: 0 4px;
+  background: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: inherit;
+}
+
+.managedOn {
+  color: #f7a600;
+  border: 1px solid #f7a600;
+  border-radius: 2px;
 }
 
 .inboundExcluded {

@@ -41,6 +41,25 @@ const invFraction = computed(() => {
   const dot = invAmount.value.indexOf('.');
   return dot === -1 ? '' : invAmount.value.slice(dot);
 });
+const $style = useCssModule();
+
+// Purple: part of the stock is on a partner ship. Blue: part is bought, not delivered yet.
+const partnerAmount = computed(() => burn.contractInventory ?? 0);
+const purchaseAmount = computed(() => burn.purchaseInventory ?? 0);
+const invClass = computed(() => ({
+  [$style.partner]: partnerAmount.value > 0,
+  [$style.purchase]: partnerAmount.value === 0 && purchaseAmount.value > 0,
+}));
+const invTooltip = computed(() => {
+  const parts: string[] = [];
+  if (partnerAmount.value > 0) {
+    parts.push(`${fixed0(partnerAmount.value)} on a partner ship`);
+  }
+  if (purchaseAmount.value > 0) {
+    parts.push(`${fixed0(purchaseAmount.value)} bought, not delivered yet`);
+  }
+  return parts.length > 0 ? `Includes ${parts.join(' and ')}` : undefined;
+});
 const hrtAmount = computed(() => burn.hrtInventory ?? 0);
 const hrtText = computed(() =>
   hrtAmount.value >= 100 ? trunc0(hrtAmount.value) : trunc01(hrtAmount.value),
@@ -126,13 +145,7 @@ const hrtShort = computed(() => buyAmt.value > 0);
       </td>
     </template>
     <td v-if="show.inv">
-      <span
-        :class="{ [$style.partner]: (burn.contractInventory ?? 0) > 0 }"
-        :title="
-          (burn.contractInventory ?? 0) > 0
-            ? `Includes ${fixed0(burn.contractInventory ?? 0)} on a partner ship`
-            : undefined
-        ">
+      <span :class="invClass" :title="invTooltip">
         {{ invWhole }}<span :class="$style.fraction">{{ invFraction }}</span>
       </span>
     </td>
@@ -185,7 +198,12 @@ const hrtShort = computed(() => buyAmt.value > 0);
 }
 
 /* The whole amount, decimals included, is purple when a partner ship brings some. */
-.partner .fraction {
+.purchase {
+  color: #3fa2de;
+}
+
+.partner .fraction,
+.purchase .fraction {
   color: inherit;
 }
 </style>
