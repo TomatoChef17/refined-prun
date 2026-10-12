@@ -18,6 +18,49 @@ function onFulfillClick(event: MouseEvent) {
   void fulfillCondition(event.currentTarget as Element, contract, condition, event.shiftKey);
 }
 
+// Deadlines are read on the computer clock.
+// Hours when the player sleeps: from 23:00 to 10:00.
+const SLEEP_START = 23;
+const SLEEP_END = 10;
+
+const end = computed(() => (isFinite(deadline) ? new Date(deadline) : undefined));
+
+const endHour = computed(() => {
+  if (!end.value) {
+    return undefined;
+  }
+  const hour = new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).format(end.value);
+  return Number(hour);
+});
+
+// The deadline falls in the night: nobody is there to fulfill the condition.
+const atNight = computed(
+  () =>
+    endHour.value !== undefined &&
+    deadline > timestampEachSecond.value &&
+    (endHour.value >= SLEEP_START || endHour.value < SLEEP_END),
+);
+
+const endTime = computed(() => {
+  if (!end.value) {
+    return undefined;
+  }
+  const day = end.value.toLocaleDateString('fr-FR', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+  });
+  const time = end.value.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const night = atNight.value ? ' — pendant ton sommeil (23h-10h)' : '';
+  return `Fin : ${day} à ${time} (heure du Maroc)${night}`;
+});
+
 const eta = computed(() => {
   if (!isFinite(deadline)) {
     return '∞';
@@ -51,8 +94,8 @@ const eta = computed(() => {
     <td>
       <ContractLink :contract="contract" />
     </td>
-    <td>
-      {{ eta }}
+    <td :class="{ [$style.night]: atNight }">
+      <span :class="$style.eta" :data-tooltip="endTime">{{ eta }}</span>
     </td>
     <td>
       <ConditionText :condition="condition" />
@@ -66,6 +109,16 @@ const eta = computed(() => {
 </template>
 
 <style module>
+/* The deadline falls between 23:00 and 10:00. */
+.night {
+  background-color: rgba(217, 83, 79, 0.45);
+  color: #fff;
+}
+
+.eta {
+  white-space: nowrap;
+}
+
 .fulfillCell {
   padding: 2px 4px;
   width: 0;
