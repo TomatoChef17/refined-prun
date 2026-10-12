@@ -128,7 +128,7 @@ const hrtShort = computed(() => buyAmt.value > 0);
     <td v-if="show.inv">
       <span
         :class="{ [$style.partner]: (burn.contractInventory ?? 0) > 0 }"
-        :data-tooltip="
+        :title="
           (burn.contractInventory ?? 0) > 0
             ? `Includes ${fixed0(burn.contractInventory ?? 0)} on a partner ship`
             : undefined
