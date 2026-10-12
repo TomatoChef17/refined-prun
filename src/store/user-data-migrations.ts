@@ -17,6 +17,14 @@ function isCheckpoint(entry: MigrationEntry): entry is Checkpoint {
 // The date is for reference only, and it does not affect migration order.
 const migrations: MigrationEntry[] = [
   [
+    '11.10.2026 Add XIT SUPPLY settings',
+    userData => {
+      userData.supply ??= { excluded: ['FK-794c', 'FK-794d'], reserved: {} };
+      userData.supply.excluded ??= [];
+      userData.supply.reserved ??= {};
+    },
+  ],
+  [
     '15.09.2026 Add govburn data',
     userData => {
       userData.govburn ??= { planets: {}, config: { planets: {} } };

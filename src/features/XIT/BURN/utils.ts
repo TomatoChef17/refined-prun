@@ -1,6 +1,5 @@
 import {
   BurnValues,
-  computeNeed,
   getMinDaysLeft,
   getResupplyDays,
   MaterialBurn,
@@ -10,10 +9,13 @@ import { materialsStore } from '@src/infrastructure/prun-api/data/materials';
 import { sortMaterials } from '@src/core/sort-materials';
 import { trunc0, trunc01 } from '@src/utils/format';
 import { userData } from '@src/store/user-data';
+import { computeNeedAll, getBuyAmount, getDaysAll } from './need';
+
+export { computeNeedAll, getBuyAmount, getDaysAll };
 import { warehousesStore } from '@src/infrastructure/prun-api/data/warehouses';
 import { storagesStore } from '@src/infrastructure/prun-api/data/storage';
 
-export type BurnSortKey = 'inv' | 'invHrt' | 'burn' | 'need' | 'days' | 'daysAll';
+export type BurnSortKey = 'inv' | 'invHrt' | 'burn' | 'need' | 'buy' | 'days' | 'daysAll';
 
 // Natural ID of Hortus Station, whose warehouse feeds the INV HRT column.
 export const HRT_NATURAL_ID = 'HRT';
@@ -24,6 +26,7 @@ export const burnSortNaturalDesc: Record<BurnSortKey, boolean> = {
   invHrt: true,
   burn: false,
   need: true,
+  buy: true,
   days: false,
   daysAll: false,
 };
@@ -36,10 +39,10 @@ function getSortValue(mat: MaterialBurn, key: BurnSortKey, naturalId: string) {
       return mat.hrtInventory ?? 0;
     case 'burn':
       return mat.dailyAmount;
-    case 'need': {
-      const need = computeNeed(mat, getResupplyDays(naturalId || undefined));
-      return isNaN(need) ? 0 : need;
-    }
+    case 'need':
+      return computeNeedAll(mat, getResupplyDays(naturalId || undefined));
+    case 'buy':
+      return getBuyAmount(mat, getResupplyDays(naturalId || undefined));
     case 'days':
       return mat.dailyAmount >= 0 ? Number.POSITIVE_INFINITY : mat.daysLeft;
     case 'daysAll':
@@ -85,16 +88,6 @@ export function getWarehouseAmounts(naturalId: string) {
     amounts[ticker] = (amounts[ticker] ?? 0) + quantity.amount;
   }
   return amounts;
-}
-
-// Days left when the planet warehouse stock is added to the base stock.
-export function getDaysAll(mat: MaterialBurn) {
-  if (mat.dailyAmount >= 0) {
-    return Number.POSITIVE_INFINITY;
-  }
-  const total =
-    mat.inventory + mat.inboundInventory + mat.remainingAllocation + (mat.warehouseInventory ?? 0);
-  return total / -mat.dailyAmount;
 }
 
 // Days All of the most urgent net-consumed material.

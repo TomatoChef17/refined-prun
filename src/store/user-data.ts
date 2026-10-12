@@ -81,6 +81,11 @@ export const initialUserData = deepFreeze({
     folders: [] as UserData.TabFolder[],
   },
   commandLists: [] as UserData.CommandList[],
+  // XIT SUPPLY: bases left out (planet natural ids) and stock kept aside at HRT per ticker.
+  supply: {
+    excluded: ['FK-794c', 'FK-794d'] as string[],
+    reserved: {} as Record<string, number>,
+  },
   govburn: {
     planets: {} as Record<string, UserData.GovBurnPlanet>,
     config: {

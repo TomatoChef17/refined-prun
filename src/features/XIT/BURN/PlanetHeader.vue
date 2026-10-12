@@ -6,6 +6,8 @@ import { PlanetBurn } from '@src/core/burn';
 import { countDays, countDaysAll } from '@src/features/XIT/BURN/utils';
 import { planetContextMenu } from '@src/components/planet-context-menu/planet-context-menu';
 import { useTileState } from '@src/features/XIT/BURN/tile-state';
+import { useBurnColumns } from '@src/features/XIT/BURN/columns';
+import { getContractInbound } from '@src/features/XIT/BURN/contract-inbound';
 import fa from '@src/utils/font-awesome.module.css';
 
 const { burn } = defineProps<{
@@ -16,7 +18,6 @@ const { burn } = defineProps<{
   onClick: () => void;
 }>();
 
-const io = useTileState('io');
 const excludeInbound = useTileState('excludeInbound');
 const includesInbound = computed(() => !excludeInbound.value.includes(burn.naturalId));
 const inboundTooltip = computed(() =>
@@ -26,7 +27,30 @@ const inboundTooltip = computed(() =>
 );
 const days = computed(() => countDays(burn.burn));
 const daysAll = computed(() => countDaysAll(burn.burn));
-const nameColspan = computed(() => (io.value ? 7 : 5));
+const { show, nameColspan, actionColspan } = useBurnColumns();
+
+// Partner ships delivering here under an accepted shipping contract (purple icon).
+const excludeContractInbound = useTileState('excludeContractInbound');
+const contractInbound = computed(() => getContractInbound(burn.naturalId || undefined));
+const hasContractInbound = computed(() => contractInbound.value.lines.length > 0);
+const includesContractInbound = computed(
+  () => !excludeContractInbound.value.includes(burn.naturalId),
+);
+const contractInboundTooltip = computed(() => {
+  const lines = contractInbound.value.lines.map(
+    x => `${x.contract} ${x.partner}: ${x.amount} ${x.ticker}`,
+  );
+  const action = includesContractInbound.value
+    ? 'Counted. Click to exclude it.'
+    : 'Not counted. Click to include it.';
+  return `Partner ship(s): ${lines.join(' · ')} — ${action}`;
+});
+
+function toggleContractInbound() {
+  excludeContractInbound.value = includesContractInbound.value
+    ? [...excludeContractInbound.value, burn.naturalId]
+    : excludeContractInbound.value.filter(x => x !== burn.naturalId);
+}
 
 function toggleInbound() {
   excludeInbound.value = includesInbound.value
@@ -56,10 +80,25 @@ function toggleInbound() {
         @click.stop="toggleInbound">
         {{ '\uf135' }}
       </button>
+      <button
+        v-if="hasContractInbound"
+        type="button"
+        :class="[
+          fa.solid,
+          $style.inbound,
+          $style.partnerShip,
+          { [$style.inboundExcluded]: !includesContractInbound },
+        ]"
+        :data-tooltip="contractInboundTooltip"
+        :aria-label="contractInboundTooltip"
+        :aria-pressed="includesContractInbound"
+        @click.stop="toggleContractInbound">
+        {{ '\uf135' }}
+      </button>
     </td>
-    <DaysCell :days="days" />
-    <DaysCell :days="daysAll" />
-    <td>
+    <DaysCell v-if="show.days" :days="days" />
+    <DaysCell v-if="show.daysAll" :days="daysAll" />
+    <td :colspan="actionColspan">
       <div :class="$style.buttons">
         <PrunButton dark inline @click="showBuffer(`BS ${burn.naturalId}`)">BS</PrunButton>
         <PrunButton dark inline @click="showBuffer(`INV ${burn.storeId.substring(0, 8)}`)">
@@ -101,6 +140,12 @@ function toggleInbound() {
   line-height: inherit;
 }
 
+/* Partner ship under a shipping contract: purple, next to my own (white) ship. */
+.partnerShip {
+  color: #b57edc;
+  margin-right: 6px;
+}
+
 .inboundExcluded {
   color: #666;
 }
@@ -110,5 +155,6 @@ function toggleInbound() {
   flex-direction: row;
   flex-wrap: wrap;
   column-gap: 0.25rem;
+  justify-content: flex-end;
 }
 </style>

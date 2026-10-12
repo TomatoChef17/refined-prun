@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { computeNeed, getResupplyDays, MaterialBurn } from '@src/core/burn';
+import { getResupplyDays, MaterialBurn } from '@src/core/burn';
 import MaterialIcon from '@src/components/MaterialIcon.vue';
 import DaysCell from '@src/features/XIT/BURN/DaysCell.vue';
 import { fixed0, fixed1, fixed2, trunc0, trunc01, trunc02 } from '@src/utils/format';
 import { useTileState } from '@src/features/XIT/BURN/tile-state';
-import { getBurnThresholds, getDaysAll } from '@src/features/XIT/BURN/utils';
+import { useBurnColumns } from '@src/features/XIT/BURN/columns';
+import {
+  computeNeedAll,
+  getBurnThresholds,
+  getBuyAmount,
+  getDaysAll,
+} from '@src/features/XIT/BURN/utils';
 import PrunButton from '@src/components/PrunButton.vue';
 import { showBuffer } from '@src/infrastructure/prun-ui/buffers';
 
@@ -51,6 +57,7 @@ const yellow = useTileState('yellow');
 const green = useTileState('green');
 const inf = useTileState('inf');
 const io = useTileState('io');
+const { show } = useBurnColumns();
 
 const isVisible = computed(() => {
   if (alwaysVisible) {
@@ -90,7 +97,11 @@ const outClass = computed(() => ({
   [C.ColoredValue.positive]: outAmount.value > 0,
 }));
 
-const needAmt = computed(() => computeNeed(burn, getResupplyDays(naturalId)));
+const resupplyDays = computed(() => getResupplyDays(naturalId));
+const needAmt = computed(() => computeNeedAll(burn, resupplyDays.value));
+const buyAmt = computed(() => getBuyAmount(burn, resupplyDays.value));
+// HRT cannot cover the whole need.
+const hrtShort = computed(() => buyAmt.value > 0);
 </script>
 
 <template>
@@ -98,33 +109,47 @@ const needAmt = computed(() => computeNeed(burn, getResupplyDays(naturalId)));
     <td :class="$style.materialContainer">
       <MaterialIcon size="inline-table" :ticker="material.ticker" />
     </td>
-    <td>
-      <span>
-        {{ invWhole }}<span :class="$style.fraction">{{ invFraction }}</span>
-      </span>
-    </td>
-    <td>
-      <span :class="{ [$style.empty]: hrtAmount === 0 }">{{ hrtText }}</span>
-    </td>
-    <template v-if="io">
-      <td>
-        <span>{{ inText }}</span>
-      </td>
-      <td>
-        <span :class="outClass">{{ outText }}</span>
-      </td>
-      <td>
+    <template v-if="show.burn">
+      <template v-if="io">
+        <td>
+          <span>{{ inText }}</span>
+        </td>
+        <td>
+          <span :class="outClass">{{ outText }}</span>
+        </td>
+        <td>
+          <span :class="changeClass">{{ changeText }}</span>
+        </td>
+      </template>
+      <td v-else>
         <span :class="changeClass">{{ changeText }}</span>
       </td>
     </template>
-    <td v-else>
-      <span :class="changeClass">{{ changeText }}</span>
+    <td v-if="show.inv">
+      <span
+        :class="{ [$style.partner]: (burn.contractInventory ?? 0) > 0 }"
+        :data-tooltip="
+          (burn.contractInventory ?? 0) > 0
+            ? `Includes ${fixed0(burn.contractInventory ?? 0)} on a partner ship`
+            : undefined
+        ">
+        {{ invWhole }}<span :class="$style.fraction">{{ invFraction }}</span>
+      </span>
     </td>
-    <td>
-      <span>{{ isNaN(needAmt) ? '0' : fixed0(needAmt) }}</span>
+    <DaysCell v-if="show.days" :days="days" />
+    <DaysCell v-if="show.daysAll" :days="daysAll" />
+    <td v-if="show.need" :class="$style.supplyStart">
+      <span :class="{ [$style.empty]: needAmt === 0 }">{{ fixed0(needAmt) }}</span>
     </td>
-    <DaysCell :days="days" />
-    <DaysCell :days="daysAll" />
+    <td v-if="show.invHrt">
+      <span :class="{ [$style.empty]: hrtAmount === 0, [$style.short]: hrtShort }">
+        {{ hrtText }}
+      </span>
+    </td>
+    <td v-if="show.buy">
+      <span v-if="buyAmt > 0" :class="$style.short">{{ fixed0(buyAmt) }}</span>
+      <span v-else :class="$style.empty">–</span>
+    </td>
     <td>
       <PrunButton dark inline @click="showBuffer(`CXM ${material.ticker}`)">CXM</PrunButton>
     </td>
@@ -139,6 +164,20 @@ const needAmt = computed(() => computeNeed(burn, getResupplyDays(naturalId)));
 
 .empty {
   color: #666;
+}
+
+.short {
+  color: #d9534f;
+  font-weight: bold;
+}
+
+/* Separates the base situation from the resupply columns. */
+.supplyStart {
+  border-left: 1px solid #2b485a;
+}
+
+.partner {
+  color: #b57edc;
 }
 
 .fraction {

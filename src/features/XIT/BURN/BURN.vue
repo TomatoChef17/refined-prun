@@ -5,6 +5,7 @@ import {
   BurnValues,
   clampNearZeroDailyAmount,
   getInboundShips,
+  getResupplyDays,
   getPlanetBurn,
   MaterialBurn,
   PlanetBurn,
@@ -12,6 +13,9 @@ import {
 import { comparePlanets } from '@src/util';
 import BurnSection from '@src/features/XIT/BURN/BurnSection.vue';
 import { useTileState } from '@src/features/XIT/BURN/tile-state';
+import { getContractInbound } from '@src/features/XIT/BURN/contract-inbound';
+import { BURN_COLUMNS, useBurnColumns } from '@src/features/XIT/BURN/columns';
+import PrunButton from '@src/components/PrunButton.vue';
 import Tooltip from '@src/components/Tooltip.vue';
 import LoadingSpinner from '@src/components/LoadingSpinner.vue';
 import MaterialRow from '@src/features/XIT/BURN/MaterialRow.vue';
@@ -21,7 +25,9 @@ import { sitesStore } from '@src/infrastructure/prun-api/data/sites';
 import {
   BurnSortKey,
   burnSortNaturalDesc,
+  computeNeedAll,
   countDays,
+  getBuyAmount,
   getDaysAll,
   getSortedTickers,
   getWarehouseAmounts,
@@ -30,7 +36,6 @@ import {
 import InlineFlex from '@src/components/InlineFlex.vue';
 import { findWithQuery } from '@src/utils/find-with-query';
 import { convertToPlanetNaturalId } from '@src/core/planet-natural-id';
-import { userData } from '@src/store/user-data';
 
 const parameters = useXitParameters();
 
@@ -104,8 +109,12 @@ const prod = useTileState('prod');
 const wf = useTileState('wf');
 const io = useTileState('io');
 const excludeInbound = useTileState('excludeInbound');
+const excludeContractInbound = useTileState('excludeContractInbound');
 const sortBy = useTileState('sortBy');
 const sortDesc = useTileState('sortDesc');
+const showColumnPicker = useTileState('showColumnPicker');
+const { show: showCol, toggle: toggleColumn } = useBurnColumns();
+const hiddenCount = computed(() => BURN_COLUMNS.filter(x => !showCol.value[x.id]).length);
 
 // Click cycle: natural direction -> reversed -> default order.
 function onSortClick(key: BurnSortKey) {
@@ -132,6 +141,8 @@ function filterBurn(burn: BurnValues, naturalId: string): BurnValues {
   const warehouse = getWarehouseAmounts(naturalId);
   // Read live from the Hortus Station WAR store; reactive, so it refreshes on every change.
   const hrt = getWarehouseAmounts(HRT_NATURAL_ID);
+  // Overall ('') sums the planets, which already include their partner ships.
+  const contractInbound = getContractInbound(naturalId || undefined);
   for (const ticker of Object.keys(burn)) {
     const mat = {
       ...withWarehouse(burn[ticker], warehouse[ticker]),
@@ -142,16 +153,18 @@ function filterBurn(burn: BurnValues, naturalId: string): BurnValues {
     if (!(hasProd && prod.value) && !(hasWf && wf.value)) {
       continue;
     }
-    if (excludeInbound.value.includes(naturalId)) {
-      const remaining = mat.inventory + mat.remainingAllocation;
-      filtered[ticker] = {
-        ...mat,
-        inboundInventory: 0,
-        daysLeft: mat.dailyAmount >= 0 ? Number.POSITIVE_INFINITY : remaining / -mat.dailyAmount,
-      };
-    } else {
-      filtered[ticker] = mat;
-    }
+    const ownShips = excludeInbound.value.includes(naturalId) ? 0 : mat.inboundInventory;
+    const partnerShips = excludeContractInbound.value.includes(naturalId)
+      ? 0
+      : (contractInbound.totals[ticker] ?? 0);
+    const inbound = ownShips + partnerShips;
+    const remaining = mat.inventory + inbound + mat.remainingAllocation;
+    filtered[ticker] = {
+      ...mat,
+      inboundInventory: inbound,
+      contractInventory: partnerShips,
+      daysLeft: mat.dailyAmount >= 0 ? Number.POSITIVE_INFINITY : remaining / -mat.dailyAmount,
+    };
   }
   return filtered;
 }
@@ -272,10 +285,9 @@ function onExpandAllClick() {
 // Exports all materials regardless of active color filters (RED/YELLOW/GREEN/INF)
 // so spreadsheet users always get the complete dataset.
 function formatBurnTable(burns: PlanetBurn[]) {
-  const resupply = userData.settings.burn.resupply;
   const header = io.value
-    ? 'Planet\tTicker\tInv\tInv HRT\tIn\tOut\tNet\tNeed\tDays\tDays All'
-    : 'Planet\tTicker\tInv\tInv HRT\tBurn/day\tNeed\tDays\tDays All';
+    ? 'Planet\tTicker\tIn\tOut\tNet\tInv\tDays\tDays All\tNeed\tInv HRT\tBuy'
+    : 'Planet\tTicker\tBurn/day\tInv\tDays\tDays All\tNeed\tInv HRT\tBuy';
   const lines = [header];
   const round = (x: number) => Math.round(x * 1000) / 1000;
   for (const planet of burns) {
@@ -287,19 +299,18 @@ function formatBurnTable(burns: PlanetBurn[]) {
       const burn = round(mat.dailyAmount);
       const inv = mat.inventory + mat.inboundInventory + mat.remainingAllocation;
       const invHrt = mat.hrtInventory ?? 0;
-      const need =
-        mat.dailyAmount >= 0 || mat.daysLeft > resupply
-          ? 0
-          : Math.ceil((mat.daysLeft - resupply) * mat.dailyAmount);
+      const resupply = getResupplyDays(planet.naturalId || undefined);
+      const need = computeNeedAll(mat, resupply);
+      const buy = getBuyAmount(mat, resupply);
       if (io.value) {
         const inAmt = round(mat.input + mat.workforce);
         const outAmt = round(mat.output);
         lines.push(
-          `${planet.planetName}\t${material.ticker}\t${inv}\t${invHrt}\t${inAmt}\t${outAmt}\t${burn}\t${need}\t${days}\t${daysAll}`,
+          `${planet.planetName}\t${material.ticker}\t${inAmt}\t${outAmt}\t${burn}\t${inv}\t${days}\t${daysAll}\t${need}\t${invHrt}\t${buy}`,
         );
       } else {
         lines.push(
-          `${planet.planetName}\t${material.ticker}\t${inv}\t${invHrt}\t${burn}\t${need}\t${days}\t${daysAll}`,
+          `${planet.planetName}\t${material.ticker}\t${burn}\t${inv}\t${days}\t${daysAll}\t${need}\t${invHrt}\t${buy}`,
         );
       }
     }
@@ -342,8 +353,28 @@ function copyBurnTable() {
       </RadioItem>
       <div :class="$style.separator" />
       <RadioItem v-model="io" horizontal>I/O</RadioItem>
+      <div :class="$style.separator" />
+      <PrunButton
+        dark
+        inline
+        data-tooltip="Show or hide columns in this tile"
+        data-tooltip-position="bottom"
+        @click="showColumnPicker = !showColumnPicker">
+        COLS{{ hiddenCount > 0 ? ` (${hiddenCount} hidden)` : '' }}
+      </PrunButton>
       <div :class="$style.spacer" />
       <CopyButton :copy-fn="copyBurnTable" data-tooltip-position="bottom" />
+    </div>
+    <div v-if="showColumnPicker" :class="[C.ComExOrdersPanel.filter, $style.columnPicker]">
+      <span :class="$style.pickerLabel">Columns</span>
+      <RadioItem
+        v-for="col in BURN_COLUMNS"
+        :key="col.id"
+        :model-value="showCol[col.id]"
+        horizontal
+        @update:model-value="toggleColumn(col.id)">
+        {{ col.label }}
+      </RadioItem>
     </div>
     <table>
       <thead>
@@ -352,7 +383,20 @@ function copyBurnTable() {
             {{ anyExpanded ? '-' : '+' }}
           </th>
           <th v-else />
-          <th :class="$style.sortable" @click="onSortClick('inv')">
+          <template v-if="showCol.burn && io">
+            <th>In</th>
+            <th>Out</th>
+            <th :class="$style.sortable" @click="onSortClick('burn')"
+              >Net{{ sortArrow('burn') }}</th
+            >
+          </template>
+          <th v-else-if="showCol.burn" :class="$style.sortable" @click="onSortClick('burn')">
+            <InlineFlex>
+              Burn{{ sortArrow('burn') }}
+              <Tooltip position="bottom" tooltip="How much of a material is consumed per day." />
+            </InlineFlex>
+          </th>
+          <th v-if="showCol.inv" :class="$style.sortable" @click="onSortClick('inv')">
             <InlineFlex>
               Inv{{ sortArrow('inv') }}
               <Tooltip
@@ -361,39 +405,37 @@ function copyBurnTable() {
                  represents the leftover materials since the last workforce consumption event." />
             </InlineFlex>
           </th>
-          <th
-            :class="$style.sortable"
-            data-tooltip="Stock available in your warehouse (WAR) at Hortus Station, updated live."
-            @click="onSortClick('invHrt')">
-            INV HRT{{ sortArrow('invHrt') }}
+          <th v-if="showCol.days" :class="$style.sortable" @click="onSortClick('days')">
+            Days{{ sortArrow('days') }}
           </th>
-          <template v-if="io">
-            <th>In</th>
-            <th>Out</th>
-            <th :class="$style.sortable" @click="onSortClick('burn')"
-              >Net{{ sortArrow('burn') }}</th
+          <th v-if="showCol.daysAll" :class="$style.sortable" @click="onSortClick('daysAll')">
+            <span data-tooltip="Days left with the stock of the warehouse on the same planet."
+              >Days All{{ sortArrow('daysAll') }}</span
             >
-          </template>
-          <th v-else :class="$style.sortable" @click="onSortClick('burn')">
-            <InlineFlex>
-              Burn{{ sortArrow('burn') }}
-              <Tooltip position="bottom" tooltip="How much of a material is consumed per day." />
-            </InlineFlex>
           </th>
-          <th :class="$style.sortable" @click="onSortClick('need')">
+          <th
+            v-if="showCol.need"
+            :class="[$style.sortable, $style.supplyStart]"
+            @click="onSortClick('need')">
             <InlineFlex>
               Need{{ sortArrow('need') }}
               <Tooltip
                 position="bottom"
-                tooltip="How much of a material needs to be delivered to be fully supplied." />
+                tooltip="How much to deliver to reach the resupply target, counting the base, inbound
+                 cargo and the warehouse on the same planet (same basis as Days All)." />
             </InlineFlex>
           </th>
-          <th :class="$style.sortable" @click="onSortClick('days')">Days{{ sortArrow('days') }}</th>
-          <th
-            :class="$style.sortable"
-            data-tooltip="Days left with the stock of the warehouse on the same planet."
-            @click="onSortClick('daysAll')">
-            Days All{{ sortArrow('daysAll') }}
+          <th v-if="showCol.invHrt" :class="$style.sortable" @click="onSortClick('invHrt')">
+            <span
+              data-tooltip="Stock available in your warehouse (WAR) at Hortus Station, updated live. Red when it cannot cover the need."
+              >INV HRT{{ sortArrow('invHrt') }}</span
+            >
+          </th>
+          <th v-if="showCol.buy" :class="$style.sortable" @click="onSortClick('buy')">
+            <span
+              data-tooltip="Part of the need that Hortus Station cannot cover: the amount to buy."
+              >Buy{{ sortArrow('buy') }}</span
+            >
           </th>
           <th>CMD</th>
         </tr>
@@ -439,6 +481,20 @@ function copyBurnTable() {
 .sortable {
   cursor: pointer;
   user-select: none;
+}
+
+.supplyStart {
+  border-left: 1px solid #2b485a;
+}
+
+.columnPicker {
+  flex-wrap: wrap;
+}
+
+.pickerLabel {
+  color: #888;
+  font-size: 11px;
+  margin: 0 4px;
 }
 
 .radioItemWithTooltip {

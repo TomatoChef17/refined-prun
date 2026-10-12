@@ -21,6 +21,9 @@ export interface MaterialBurn {
   inboundInventory: number;
   // Stock in the warehouse on the same planet. Only filled by XIT BURN.
   warehouseInventory?: number;
+  // Cargo a partner ship brings to the base under an accepted shipping contract.
+  // Already included in inboundInventory when counted. Only filled by XIT BURN/SUPPLY.
+  contractInventory?: number;
   // Stock in the Hortus Station (HRT) warehouse. Only filled by XIT BURN.
   hrtInventory?: number;
   daysLeft: number;
