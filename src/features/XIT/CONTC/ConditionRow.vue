@@ -54,8 +54,7 @@ const endTime = computed(() => {
     hour: '2-digit',
     minute: '2-digit',
   });
-  const night = atNight.value ? ' — pendant ton sommeil (23h-10h)' : '';
-  return `Fin : ${day} à ${time} (heure du Maroc)${night}`;
+  return `Fin : ${day} à ${time}`;
 });
 
 const eta = computed(() => {
