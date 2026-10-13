@@ -7,6 +7,8 @@ import { countDays, countDaysAll } from '@src/features/XIT/BURN/utils';
 import { planetContextMenu } from '@src/components/planet-context-menu/planet-context-menu';
 import { useTileState } from '@src/features/XIT/BURN/tile-state';
 import { useBurnColumns } from '@src/features/XIT/BURN/columns';
+import { ContractInboundLine } from '@src/features/XIT/BURN/contract-inbound-calc';
+import { fixed0 } from '@src/utils/format';
 import {
   getContractInbound,
   getPurchaseContractInbound,
@@ -39,26 +41,59 @@ const hasContractInbound = computed(() => contractInbound.value.lines.length > 0
 const includesContractInbound = computed(
   () => !excludeContractInbound.value.includes(burn.naturalId),
 );
+function formatDue(deadline: number) {
+  return new Date(deadline)
+    .toLocaleString('en-GB', {
+      weekday: 'short',
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+    .replace(',', '');
+}
+
+// One block per contract: status, deadline, then its materials.
+function describeContracts(
+  lines: ContractInboundLine[],
+  icons: { pickup: string; transit: string },
+) {
+  const byContract = new Map<string, ContractInboundLine[]>();
+  for (const line of lines) {
+    const list = byContract.get(line.contract) ?? [];
+    list.push(line);
+    byContract.set(line.contract, list);
+  }
+  return [...byContract.values()]
+    .map(group => {
+      const first = group[0];
+      const status =
+        first.stage === undefined
+          ? ''
+          : first.stage === 'transit'
+            ? `${icons.transit} On board`
+            : `${icons.pickup} Waiting for pickup`;
+      const due = first.deadline !== undefined ? `⏰ Due ${formatDue(first.deadline)}` : '';
+      const materials = group.map(x => `${fixed0(x.amount)} ${x.ticker}`).join(' · ');
+      return [`📦 ${first.contract} · ${first.partner}`, status, due, `   ${materials}`]
+        .filter(x => x.length > 0)
+        .join('\n');
+    })
+    .join('\n\n');
+}
+
 const contractInboundTooltip = computed(() => {
-  const lines = contractInbound.value.lines.map(x => {
-    const stage = x.stage === 'transit' ? 'on board' : 'waiting for pickup';
-    const due =
-      x.deadline !== undefined
-        ? `, due ${new Date(x.deadline).toLocaleString('en-GB', {
-            weekday: 'short',
-            day: '2-digit',
-            month: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            hourCycle: 'h23',
-          })}`
-        : '';
-    return `${x.contract} ${x.partner}: ${x.amount} ${x.ticker} (${stage}${due})`;
-  });
   const action = includesContractInbound.value
-    ? 'Counted. Click to exclude it.'
-    : 'Not counted. Click to include it.';
-  return `Partner ship(s): ${lines.join(' · ')} — ${action}`;
+    ? '👆 Counted. Click to ignore it.'
+    : '🚫 Ignored. Click to count it.';
+  return [
+    '🚀 Partner ships on the way',
+    '',
+    describeContracts(contractInbound.value.lines, { pickup: '⏳', transit: '✅' }),
+    '',
+    action,
+  ].join('\n');
 });
 
 function toggleContractInbound() {
@@ -78,13 +113,16 @@ const includesPurchaseInbound = computed(
   () => !excludePurchaseInbound.value.includes(burn.naturalId),
 );
 const purchaseInboundTooltip = computed(() => {
-  const lines = purchaseInbound.value.lines.map(
-    x => `${x.contract} ${x.partner}: ${x.amount} ${x.ticker}`,
-  );
   const action = includesPurchaseInbound.value
-    ? 'Counted in Inv and Days. Click to exclude it.'
-    : 'Not counted. Click to include it.';
-  return `Bought, not delivered yet (purchase contracts): ${lines.join(' · ')} — ${action}`;
+    ? '👆 Counted. Click to ignore it.'
+    : '🚫 Ignored. Click to count it.';
+  return [
+    '🛒 Bought, not delivered yet',
+    '',
+    describeContracts(purchaseInbound.value.lines, { pickup: '⏳', transit: '✅' }),
+    '',
+    action,
+  ].join('\n');
 });
 
 function togglePurchaseInbound() {
@@ -213,6 +251,8 @@ function toggleInbound() {
 
 .inbound {
   float: right;
+  /* Keeps the line breaks of the multi-line tooltips. */
+  white-space: pre-line;
   border: 0;
   padding: 0;
   background: none;
