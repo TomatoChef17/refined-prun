@@ -139,6 +139,7 @@ export default ts.config(
   {
     ignores: [
       'dist/**/*',
+      'public/**/*.js',
       '.tmp/**/*',
       'eslint.config.mjs',
       'src/types/unimport.d.ts',

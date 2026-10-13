@@ -343,15 +343,34 @@ function onTileReady(tile: PrunTile) {
     typeCell.dataset.rpCol = 'type';
     const locationCell = document.createElement('td');
     locationCell.dataset.rpCol = 'location';
+    const setText = (cell: HTMLElement, text: string) => {
+      if (cell.textContent !== text) {
+        cell.textContent = text;
+      }
+    };
+    // Also runs again when a player name arrives from FIO or a contract changes,
+    // so the filter result stays correct after the search was typed.
     const update = () => {
       const contract = getRowContract(row);
-      typeCell.textContent = getContractKind(contract) ?? '';
-      locationCell.textContent = getContractLocation(contract) ?? '';
+      setText(typeCell, getContractKind(contract) ?? '');
+      setText(locationCell, getContractLocation(contract) ?? '');
+      void getPlayerName(getRowPartnerCode(row));
+      applyToRow(row);
     };
     keepCellsLast(row, [typeCell, locationCell]);
     keepCellAfterPartner(row, playerCell);
     // Stops when the game removes the row.
     watchEffectWhileNodeAlive(row, update);
+    // The game can reuse a row for another contract: check the contract ID text.
+    let lastId = row.children[0]?.textContent;
+    const observer = new MutationObserver(() => {
+      const id = row.children[0]?.textContent;
+      if (id !== lastId) {
+        lastId = id;
+        update();
+      }
+    });
+    observer.observe(row, { childList: true, subtree: true, characterData: true });
   };
 
   subscribe($$(tile.anchor, 'table'), tableElement => {
@@ -474,12 +493,15 @@ function matchesRow(row: HTMLElement, search: string) {
     return true;
   }
   const query = search.toLowerCase();
-  // The contract ID, the partner company, the player and the base name or ID match.
+  // The contract ID, name and preamble, the partner company, the player and the base name or ID match.
   const contract = row.children[0]?.textContent?.toLowerCase() ?? '';
   const partner = getRowContract(row)?.partner.name.toLowerCase() ?? '';
   const player = getPlayerName(getRowPartnerCode(row))?.toLowerCase() ?? '';
   const location = getContractLocationSearchText(getRowContract(row));
+  const contractData = getRowContract(row);
+  const title = `${contractData?.name ?? ''} ${contractData?.preamble ?? ''}`.toLowerCase();
   return (
+    title.includes(query) ||
     partner.includes(query) ||
     player.includes(query) ||
     contract.includes(query) ||
