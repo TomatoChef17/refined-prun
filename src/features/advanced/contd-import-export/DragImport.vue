@@ -6,8 +6,92 @@ import { MaterialEntry } from './parsers';
 import { DraggedStack, QuickAmount, getDraggedStacks, quickAmounts, shipAmounts } from './drag';
 import { SHIP_BAYS, bayUsage, cargoLoad } from './ship-fill';
 import { parseDisplayedInteger } from './numbers';
+import { useTile } from '@src/hooks/use-tile';
+import { BaseLookup, balanceBay, needFill, sortByBaseStock } from './base-supply';
+import { getBaseLookup, getBaseOptions, getDraftBase, getResupplyDays } from './base-lookup';
 
 const materials = defineModel<MaterialEntry[]>({ required: true });
+
+const tile = useTile();
+
+// Destination base: found in the draft conditions, or picked by hand.
+const pickedBaseKey = 'rprun-contd-drag-base';
+const pickedBase = ref(localStorage.getItem(pickedBaseKey) ?? '');
+const draftBase = computed(() => getDraftBase(tile.parameter));
+const baseOptions = computed(() => getBaseOptions());
+const baseId = computed(() => draftBase.value ?? (pickedBase.value || undefined));
+const onBasePick = (e: Event) => {
+  pickedBase.value = (e.target as HTMLSelectElement).value;
+  localStorage.setItem(pickedBaseKey, pickedBase.value);
+};
+const baseLookup = computed<BaseLookup | undefined>(() => getBaseLookup(baseId.value));
+const resupplyDays = computed(() => getResupplyDays(baseId.value));
+
+// Keeps the list in XIT BURN Inv order of the destination base, largest first.
+const sortList = () => {
+  const lookup = baseLookup.value;
+  if (!lookup) {
+    return;
+  }
+  const sorted = sortByBaseStock(materials.value, lookup);
+  if (sorted.some((x, i) => x !== materials.value[i])) {
+    materials.value.splice(0, materials.value.length, ...sorted);
+  }
+};
+watch(baseLookup, sortList);
+
+// Days the base lasts on the least covered material after adding the entries.
+const daysAfter = (entries: MaterialEntry[], lookup: BaseLookup) => {
+  let days = Infinity;
+  for (const entry of entries) {
+    const mat = lookup(entry.ticker);
+    if (!mat || mat.usePerDay <= 0) {
+      continue;
+    }
+    const listed = sumBy(
+      materials.value.filter(x => x.ticker === entry.ticker),
+      x => (x.amount > 0 ? x.amount : 0),
+    );
+    days = Math.min(days, (mat.stock + listed + entry.amount) / mat.usePerDay);
+  }
+  return Number.isFinite(days) ? Math.floor(days) : undefined;
+};
+
+const baseAmounts = (stacks: DraggedStack[]): QuickAmount[] => {
+  const lookup = baseLookup.value;
+  if (!lookup) {
+    return [];
+  }
+  const days = resupplyDays.value;
+  const needOption: QuickAmount = {
+    label: 'NEED',
+    amount: sumBy(needFill(stacks, materials.value, lookup, days), x => x.amount),
+    resolve: stack => needFill([stack], materials.value, lookup, days)[0]?.amount ?? 0,
+    fill: dragged => needFill(dragged, materials.value, lookup, days),
+    title: `Units the base needs to last ${days} days: ${describe(
+      needFill(stacks, materials.value, lookup, days),
+    )}`,
+  };
+  const balanced = SHIP_BAYS.map<QuickAmount>(bay => {
+    const fill = (dragged: DraggedStack[]) => balanceBay(bay, materials.value, dragged, lookup);
+    const preview = fill(stacks);
+    const after = daysAfter(preview, lookup);
+    return {
+      label: `=${bay.label}`,
+      amount: sumBy(preview, x => x.amount),
+      resolve: stack => fill([stack])[0]?.amount ?? 0,
+      fill,
+      title:
+        `${bay.label} shared so every material lasts the same days` +
+        (after !== undefined ? ` (${after} d)` : '') +
+        `: ${describe(preview)}`,
+    };
+  });
+  return [needOption, ...balanced];
+};
+
+const describe = (entries: MaterialEntry[]) =>
+  entries.map(x => `${x.amount} ${x.ticker}`).join(', ') || 'nothing';
 
 const dragHover = ref<DraggedStack[] | undefined>();
 
@@ -28,6 +112,7 @@ const options = computed<QuickAmount[]>(() => {
   return [
     ...quickAmounts(Math.max(...stacks.map(x => x.quantity)), stacks.length === 1),
     ...shipAmounts(stacks, materials.value),
+    ...baseAmounts(stacks),
   ];
 });
 
@@ -109,6 +194,7 @@ const onOptionDrop = (e: DragEvent, option: QuickAmount) => {
     for (const entry of option.fill(stacks)) {
       addMaterial(entry.ticker, entry.amount);
     }
+    sortList();
     return;
   }
   if (option.prompt) {
@@ -123,6 +209,7 @@ const onOptionDrop = (e: DragEvent, option: QuickAmount) => {
       materials.value.push({ ticker: stack.ticker, amount });
     }
   }
+  sortList();
 };
 
 const confirmPrompt = () => {
@@ -137,6 +224,7 @@ const confirmPrompt = () => {
   const amount = clamp(typed, 1, stack.quantity);
   materials.value.push({ ticker: stack.ticker, amount });
   amountPrompt.value = undefined;
+  sortList();
 };
 
 const onPromptKeydown = (e: KeyboardEvent) => {
@@ -167,6 +255,21 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
 </script>
 
 <template>
+  <div :class="[$style.baseRow, C.type.typeSmall]">
+    <span>For base</span>
+    <span v-if="draftBase">{{
+      baseOptions.find(x => x.naturalId === draftBase)?.name ?? draftBase
+    }}</span>
+    <select v-else :class="$style.baseSelect" :value="pickedBase" @change="onBasePick">
+      <option value="">none</option>
+      <option v-for="option in baseOptions" :key="option.naturalId" :value="option.naturalId">
+        {{ option.name }}
+      </option>
+    </select>
+    <span v-if="baseLookup" :class="$style.baseHint"
+      >list in BURN Inv order · NEED {{ resupplyDays }} d</span
+    >
+  </div>
   <div
     :class="[$style.dropZone, dragHover && $style.dropZoneHover]"
     @dragenter="onZoneDragEnter"
@@ -216,6 +319,7 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
             C.DropTargetView.item,
             $style.overlaySquare,
             option.fill && $style.shipSquare,
+            option.label === 'NEED' && $style.needSquare,
             option.fill && option.amount < 1 && $style.shipFull,
             hoveredOption === index && C.DropTargetView.isOver,
           ]">
@@ -228,7 +332,7 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
 
 <style module>
 .dropZone {
-  min-height: 80px;
+  min-height: 100px;
   width: 100%;
   position: relative;
   border: 1px dashed rgb(141, 100, 17);
@@ -317,6 +421,32 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
 .shipSquare {
   border-color: rgb(63, 162, 222);
   color: rgb(63, 162, 222);
+}
+
+/* NEED stands out from the bay fills. */
+.needSquare {
+  border-color: rgb(92, 184, 92);
+  color: rgb(92, 184, 92);
+}
+
+.baseRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 4px;
+  color: rgb(136, 136, 136);
+}
+
+.baseSelect {
+  background: rgb(66, 54, 29);
+  color: rgb(187, 187, 187);
+  border: none;
+  border-bottom: 1px solid rgb(141, 100, 17);
+  font-size: inherit;
+}
+
+.baseHint {
+  margin-left: auto;
 }
 
 /* The bay is already full with the listed materials. */
