@@ -62,6 +62,15 @@ describe('getShipmentInbound', () => {
     });
   });
 
+  it('tells whether the cargo is still to be picked up or on the way', () => {
+    const waiting = getShipmentInbound([shipping('CLOSED')], naturalIdOf)['SB-838b'];
+    expect(waiting.lines[0].stage).toBe('pickup');
+    const contract = shipping('CLOSED');
+    contract.conditions.find(x => x.id === 'pick')!.status = 'FULFILLED';
+    const loaded = getShipmentInbound([contract], naturalIdOf)['SB-838b'];
+    expect(loaded.lines[0].stage).toBe('transit');
+  });
+
   it('ignores delivered shipments and contracts not accepted yet', () => {
     expect(getShipmentInbound([shipping('CLOSED', 'FULFILLED')], naturalIdOf)).toEqual({});
     expect(getShipmentInbound([shipping('OPEN')], naturalIdOf)).toEqual({});

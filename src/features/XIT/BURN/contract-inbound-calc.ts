@@ -4,6 +4,10 @@ export interface ContractInboundLine {
   partner: string;
   ticker: string;
   amount: number;
+  // Shipping contracts only: still to be picked up, or already loaded on the partner's ship.
+  stage?: 'pickup' | 'transit';
+  // Delivery deadline (ms), when the contract has one.
+  deadline?: number;
 }
 
 export interface ContractInbound {
@@ -42,6 +46,18 @@ function shipmentMaterials(contract: PrunApi.Contract, delivery: PrunApi.Contrac
     .filter((x): x is PrunApi.MaterialAmount => !!x && x.amount > 0);
 }
 
+// The cargo is on the partner's ship once every pickup before this delivery is done.
+function shipmentStage(
+  contract: PrunApi.Contract,
+  delivery: PrunApi.ContractCondition,
+): 'pickup' | 'transit' {
+  const pickups = contract.conditions.filter(
+    x => x.type === 'PICKUP_SHIPMENT' && delivery.dependencies.includes(x.id),
+  );
+  const loaded = pickups.length > 0 && pickups.every(x => x.status === 'FULFILLED');
+  return loaded ? 'transit' : 'pickup';
+}
+
 // Planet natural id -> cargo still to be delivered there by a partner.
 export function getShipmentInbound(
   contracts: PrunApi.Contract[],
@@ -65,6 +81,8 @@ export function getShipmentInbound(
         continue;
       }
       const entry = (result[planet] ??= { totals: {}, lines: [] });
+      const stage = shipmentStage(contract, condition);
+      const deadline = condition.deadline?.timestamp;
       for (const quantity of shipmentMaterials(contract, condition)) {
         const ticker = quantity.material.ticker;
         entry.totals[ticker] = (entry.totals[ticker] ?? 0) + quantity.amount;
@@ -73,6 +91,8 @@ export function getShipmentInbound(
           partner: contract.partner.name,
           ticker,
           amount: quantity.amount,
+          stage,
+          deadline,
         });
       }
     }

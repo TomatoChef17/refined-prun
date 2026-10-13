@@ -40,9 +40,21 @@ const includesContractInbound = computed(
   () => !excludeContractInbound.value.includes(burn.naturalId),
 );
 const contractInboundTooltip = computed(() => {
-  const lines = contractInbound.value.lines.map(
-    x => `${x.contract} ${x.partner}: ${x.amount} ${x.ticker}`,
-  );
+  const lines = contractInbound.value.lines.map(x => {
+    const stage = x.stage === 'transit' ? 'on board' : 'waiting for pickup';
+    const due =
+      x.deadline !== undefined
+        ? `, due ${new Date(x.deadline).toLocaleString('en-GB', {
+            weekday: 'short',
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hourCycle: 'h23',
+          })}`
+        : '';
+    return `${x.contract} ${x.partner}: ${x.amount} ${x.ticker} (${stage}${due})`;
+  });
   const action = includesContractInbound.value
     ? 'Counted. Click to exclude it.'
     : 'Not counted. Click to include it.';
