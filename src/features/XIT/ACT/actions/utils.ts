@@ -11,7 +11,12 @@ import { shipsStore } from '@src/infrastructure/prun-api/data/ships';
 import { getBaseStore } from '@src/core/store-id';
 
 export function serializeStorage(storage: PrunApi.Store) {
-  const getShipName = () => shipsStore.getByStoreId(storage.id)?.name;
+  // Unnamed ships are known by their registration (AVI-07IZ8).
+  const getShipName = () => {
+    const ship = shipsStore.getByStoreId(storage.id);
+    const name = ship?.name ?? '';
+    return name.length > 0 ? name : ship?.registration;
+  };
   switch (storage.type) {
     case 'STL_FUEL_STORE':
       return getShipName() + ' STL Store';
@@ -32,6 +37,10 @@ export function serializeStorage(storage: PrunApi.Store) {
   return 'Error, unable to serialize';
 }
 
+function getShipByNameOrRegistration(name: string) {
+  return shipsStore.getByName(name) ?? shipsStore.getByRegistration(name);
+}
+
 export function deserializeStorage(serializedName: string | undefined) {
   if (!serializedName) {
     return undefined;
@@ -50,15 +59,15 @@ export function deserializeStorage(serializedName: string | undefined) {
   }
   name = extractName(serializedName, 'Cargo');
   if (name) {
-    return storagesStore.getById(shipsStore.getByName(name)?.idShipStore);
+    return storagesStore.getById(getShipByNameOrRegistration(name)?.idShipStore);
   }
   name = extractName(serializedName, 'FTL Store');
   if (name) {
-    return storagesStore.getById(shipsStore.getByName(name)?.idFtlFuelStore);
+    return storagesStore.getById(getShipByNameOrRegistration(name)?.idFtlFuelStore);
   }
   name = extractName(serializedName, 'STL Store');
   if (name) {
-    return storagesStore.getById(shipsStore.getByName(name)?.idStlFuelStore);
+    return storagesStore.getById(getShipByNameOrRegistration(name)?.idStlFuelStore);
   }
 
   return undefined;
