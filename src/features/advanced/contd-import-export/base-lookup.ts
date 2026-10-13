@@ -85,21 +85,36 @@ export function getBaseLookup(naturalId: string | undefined): BaseLookup | undef
   };
 }
 
+export interface HrtStock {
+  stock: number;
+  // Still to provide from HRT in my open contracts.
+  contracts: number;
+  // Kept aside in XIT SUPPLY.
+  kept: number;
+  free: number;
+}
+
 // Hortus Station (HRT) warehouse stock that is free to ship: not promised in my contracts
 // and not kept aside in XIT SUPPLY.
-export function getHrtFree() {
+export function getHrtStock(): (ticker: string) => HrtStock {
   const stock = getWarehouseAmounts(HRT_NATURAL_ID);
   const flows = getContractFlows(
     contractsStore.all.value ?? [],
     HRT_NATURAL_ID,
     getEntityNaturalIdFromAddress,
   );
-  const free: Record<string, number> = {};
-  for (const [ticker, amount] of Object.entries(stock)) {
-    const reserved = (flows.reserved[ticker] ?? 0) + (userData.supply.reserved[ticker] ?? 0);
-    free[ticker] = Math.max(0, Math.floor(amount - reserved));
-  }
-  return free;
+  const kept = userData.supply.reserved;
+  return ticker => {
+    const amount = stock[ticker] ?? 0;
+    const contracts = flows.reserved[ticker] ?? 0;
+    const aside = kept[ticker] ?? 0;
+    return {
+      stock: amount,
+      contracts,
+      kept: aside,
+      free: Math.max(0, Math.floor(amount - contracts - aside)),
+    };
+  };
 }
 
 export { getResupplyDays };

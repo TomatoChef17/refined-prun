@@ -2,6 +2,10 @@ export interface MaterialEntry {
   ticker: string;
   amount: number;
   price?: number;
+  // Drag panel only: why NEED gave less than the base needs.
+  note?: string;
+  // 'partial': less than needed. 'none': nothing could be sent. 'enough': nothing needed.
+  level?: 'partial' | 'none' | 'enough';
 }
 
 export type TemplateType = 'BUY' | 'SELL' | 'SHIP';

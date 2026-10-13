@@ -7,12 +7,13 @@ import { DraggedStack, QuickAmount, getDraggedStacks, quickAmounts, shipAmounts 
 import { SHIP_BAYS, bayUsage, cargoLoad } from './ship-fill';
 import { parseDisplayedInteger } from './numbers';
 import { useTile } from '@src/hooks/use-tile';
-import { BaseLookup, balanceBay, needFill, sortByBaseStock } from './base-supply';
+import { BaseLookup, balanceBay, needAmount, needFill, sortByBaseStock } from './base-supply';
+import { fixed0 } from '@src/utils/format';
 import {
   getBaseLookup,
   getBaseOptions,
   getDraftBase,
-  getHrtFree,
+  getHrtStock,
   getResupplyDays,
 } from './base-lookup';
 
@@ -63,7 +64,67 @@ const daysAfter = (entries: MaterialEntry[], lookup: BaseLookup) => {
   return Number.isFinite(days) ? Math.floor(days) : undefined;
 };
 
-const hrtFree = computed(() => getHrtFree());
+const hrtStock = computed(() => getHrtStock());
+
+const listedOf = (ticker: string) =>
+  sumBy(
+    materials.value.filter(x => x.ticker === ticker),
+    x => (x.amount > 0 ? x.amount : 0),
+  );
+
+const baseName = computed(
+  () => baseOptions.value.find(x => x.naturalId === baseId.value)?.name ?? baseId.value ?? '',
+);
+
+// One row per dragged material, also when nothing can be sent, with the reason.
+const explain = (
+  dragged: DraggedStack[],
+  entries: MaterialEntry[],
+  lookup: BaseLookup,
+  mode: 'need' | 'bay',
+): MaterialEntry[] =>
+  dragged.map(({ ticker }) => {
+    const amount = entries.find(x => x.ticker === ticker)?.amount ?? 0;
+    const base = lookup(ticker);
+    if (!base || base.usePerDay <= 0) {
+      return {
+        ticker,
+        amount: 0,
+        level: 'none',
+        note: `${baseName.value} does not use ${ticker}.`,
+      };
+    }
+    const listed = listedOf(ticker);
+    const hrt = hrtStock.value(ticker);
+    const free = Math.max(0, hrt.free - listed);
+    const freeText =
+      `Free at HRT: ${fixed0(free)} = stock ${fixed0(hrt.stock)}` +
+      ` − my contracts ${fixed0(hrt.contracts)}` +
+      ` − reserved in XIT SUPPLY ${fixed0(hrt.kept)}` +
+      (listed > 0 ? ` − already listed ${fixed0(listed)}` : '') +
+      '.';
+    if (mode === 'bay') {
+      return free > 0 ? { ticker, amount } : { ticker, amount: 0, level: 'none', note: freeText };
+    }
+    const need = needAmount(base, resupplyDays.value, listed, Infinity);
+    if (need === 0) {
+      return {
+        ticker,
+        amount: 0,
+        level: 'enough',
+        note: `No need: the base has enough for ${resupplyDays.value} days.`,
+      };
+    }
+    if (amount >= need) {
+      return { ticker, amount };
+    }
+    return {
+      ticker,
+      amount,
+      level: amount > 0 ? 'partial' : 'none',
+      note: `Need ${fixed0(need)}, only ${fixed0(amount)} sent. ${freeText}`,
+    };
+  });
 
 // NEED and the balanced fills take the units from HRT, not from the dragged stack:
 // drag from the destination base only to pick the materials.
@@ -75,7 +136,7 @@ const fromHrt = (stacks: DraggedStack[]): DraggedStack[] =>
     );
     return {
       ticker: stack.ticker,
-      quantity: Math.max(0, (hrtFree.value[stack.ticker] ?? 0) - listed),
+      quantity: Math.max(0, hrtStock.value(stack.ticker).free - listed),
     };
   });
 
@@ -90,14 +151,17 @@ const baseAmounts = (dragged: DraggedStack[]): QuickAmount[] => {
     label: 'NEED',
     amount: sumBy(needFill(stacks, materials.value, lookup, days), x => x.amount),
     resolve: stack => needFill(fromHrt([stack]), materials.value, lookup, days)[0]?.amount ?? 0,
-    fill: list => needFill(fromHrt(list), materials.value, lookup, days),
+    fill: list =>
+      explain(list, needFill(fromHrt(list), materials.value, lookup, days), lookup, 'need'),
     title: `Units the base needs to last ${days} days, up to the free HRT stock: ${describe(
       needFill(stacks, materials.value, lookup, days),
     )}`,
   };
   const balanced = SHIP_BAYS.map<QuickAmount>(bay => {
-    const fill = (list: DraggedStack[]) => balanceBay(bay, materials.value, fromHrt(list), lookup);
-    const preview = fill(stacks);
+    const balance = (list: DraggedStack[]) =>
+      balanceBay(bay, materials.value, fromHrt(list), lookup);
+    const fill = (list: DraggedStack[]) => explain(list, balance(list), lookup, 'bay');
+    const preview = balance(stacks);
     const after = daysAfter(preview, lookup);
     return {
       label: `=${bay.label}`,
@@ -150,12 +214,15 @@ const loadSummary = computed(() => {
 });
 
 // Ship fills add to an existing row of the same material instead of duplicating it.
-const addMaterial = (ticker: string, amount: number) => {
+const addMaterial = (entry: MaterialEntry) => {
+  const { ticker, amount, note, level } = entry;
   const row = materials.value.find(x => x.ticker === ticker && x.price === undefined);
   if (row) {
     row.amount += amount;
+    row.note = note;
+    row.level = level;
   } else {
-    materials.value.push({ ticker, amount });
+    materials.value.push({ ticker, amount, note, level });
   }
 };
 
@@ -215,7 +282,7 @@ const onOptionDrop = (e: DragEvent, option: QuickAmount) => {
   }
   if (option.fill) {
     for (const entry of option.fill(stacks)) {
-      addMaterial(entry.ticker, entry.amount);
+      addMaterial(entry);
     }
     sortList();
     return;
@@ -233,6 +300,13 @@ const onOptionDrop = (e: DragEvent, option: QuickAmount) => {
     }
   }
   sortList();
+};
+
+// A typed amount replaces the NEED explanation.
+const onAmountInput = (material: MaterialEntry, e: Event) => {
+  material.amount = Number((e.target as HTMLInputElement).value);
+  material.note = undefined;
+  material.level = undefined;
 };
 
 const confirmPrompt = () => {
@@ -306,9 +380,14 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
       <span :class="[$style.materialTicker, C.type.typeSmall]">{{ material.ticker }}</span>
       <input
         type="number"
-        :class="$style.amountInput"
+        :class="[
+          $style.amountInput,
+          material.level === 'partial' && $style.amountPartial,
+          material.level === 'none' && $style.amountNone,
+        ]"
         :value="material.amount"
-        @input="material.amount = Number(($event.target as HTMLInputElement).value)" />
+        :data-tooltip="material.note"
+        @input="onAmountInput(material, $event)" />
       <PrunButton dark inline @click="materials.splice(index, 1)">x</PrunButton>
     </div>
     <div v-if="amountPrompt" :class="$style.materialRow">
@@ -444,6 +523,16 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
 .shipSquare {
   border-color: rgb(63, 162, 222);
   color: rgb(63, 162, 222);
+}
+
+/* NEED gave less than the base needs. */
+.amountPartial {
+  background: rgba(247, 166, 0, 0.35);
+}
+
+/* Nothing could be sent. */
+.amountNone {
+  background: rgba(217, 83, 79, 0.45);
 }
 
 /* NEED stands out from the bay fills. */
