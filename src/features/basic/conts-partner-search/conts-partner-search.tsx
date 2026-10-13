@@ -155,10 +155,21 @@ function keepCellsLast(row: HTMLElement, cells: HTMLElement[]) {
   observeDescendantListChanged(row, place);
 }
 
+// Deepest element that holds the text, like the partner link inside the cell.
+function findTextLeaf(root: HTMLElement): HTMLElement | undefined {
+  for (const child of Array.from(root.children) as HTMLElement[]) {
+    if ((child.textContent ?? '').trim().length > 0) {
+      return findTextLeaf(child) ?? child;
+    }
+  }
+  return undefined;
+}
+
 // Player name of the partner. Click the cell to type the name when FIO does not know it.
 function createPlayerCell(row: HTMLElement) {
   const cell = document.createElement('td');
   cell.dataset.rpCol = 'player';
+  cell.style.cursor = 'pointer';
   let editing = false;
 
   const render = () => {
@@ -167,19 +178,27 @@ function createPlayerCell(row: HTMLElement) {
     }
     const code = getRowPartnerCode(row);
     const name = code ? getPlayerName(code) : undefined;
-    // Same font and color as the game partner link.
-    const partnerLink = Array.from(row.children)
+    // Copy of the game partner cell content, so the font, color and spacing are the same.
+    const partner = Array.from(row.children)
       .filter(x => !isAddedCell(x))
-      .at(1)?.firstElementChild;
-    const link = document.createElement('span');
-    link.className = partnerLink?.className ?? '';
-    link.style.cursor = 'pointer';
-    link.textContent = name ?? '–';
-    if (!name) {
-      link.style.color = '#666';
+      .at(1);
+    const text = name ?? '–';
+    const copy = partner?.cloneNode(true) as HTMLElement | undefined;
+    const leaf = copy ? findTextLeaf(copy) : undefined;
+    if (copy && leaf) {
+      for (const x of Array.from(copy.querySelectorAll('[data-tooltip]'))) {
+        x.removeAttribute('data-tooltip');
+      }
+      leaf.textContent = text;
+      if (!name) {
+        leaf.style.color = '#666';
+      }
+      cell.replaceChildren(...Array.from(copy.childNodes));
+    } else {
+      cell.textContent = text;
     }
-    cell.replaceChildren(link);
-    cell.dataset.tooltip = name
+    // Title, not data-tooltip: the game styles data-tooltip targets as boxes, which breaks the table cell.
+    cell.title = name
       ? 'Click to open USR. Shift+click to change the name.'
       : 'Not found in FIO. Click to type the player name.';
   };
