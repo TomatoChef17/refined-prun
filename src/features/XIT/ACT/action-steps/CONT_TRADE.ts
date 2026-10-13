@@ -25,6 +25,26 @@ interface Data {
   location: string;
   currency: string;
   daysToFulfill: number;
+  // Player to send the draft to. Filled in the Recipient field; the player clicks SEND.
+  recipient?: string;
+}
+
+// The Recipient field of the "Send contract draft" section.
+function findRecipientInput(anchor: Element) {
+  const inputs = _$$(anchor, 'input');
+  const byPlaceholder = inputs.find(x => /user ?name/i.test(x.placeholder));
+  if (byPlaceholder) {
+    return byPlaceholder;
+  }
+  for (const input of inputs) {
+    let row = input.parentElement;
+    for (let i = 0; i < 4 && row; i++, row = row.parentElement) {
+      if (/^\s*recipient/i.test(row.textContent ?? '')) {
+        return input;
+      }
+    }
+  }
+  return undefined;
 }
 
 export const CONT_TRADE = act.addActionStep<Data>({
@@ -33,7 +53,8 @@ export const CONT_TRADE = act.addActionStep<Data>({
   description: data => {
     const materialCount = Object.keys(data.materials).length;
     const typeLabel = data.tradeType === 'BUYING' ? 'Buy' : 'Sell';
-    return `Create ${typeLabel} contract draft (${fixed0(materialCount)} materials)`;
+    const to = data.recipient ? ` for ${data.recipient}` : '';
+    return `Create ${typeLabel} contract draft${to} (${fixed0(materialCount)} materials)`;
   },
   execute: async ctx => {
     const { data, log, setStatus, requestTile, waitAct, complete } = ctx;
@@ -118,6 +139,16 @@ export const CONT_TRADE = act.addActionStep<Data>({
     // Save conditions, after the player has reviewed them.
     await waitAct('Save conditions?');
     await saveConditions(ctx, draftTile, newDraft.naturalId);
+
+    if (data.recipient) {
+      const recipientInput = findRecipientInput(anchor);
+      if (recipientInput) {
+        selectAndChangeInputValue(recipientInput, data.recipient);
+        log.info(`Recipient set: ${data.recipient}. Check it, then click SEND.`);
+      } else {
+        log.warning(`Could not find the Recipient field. Send the draft to ${data.recipient}.`);
+      }
+    }
 
     log.success(`Contract draft ${newDraft.naturalId} ready to send`);
     complete();

@@ -1,6 +1,7 @@
 import './actions/cont-ship/cont-ship';
 import './actions/cont-trade/cont-trade';
 import './actions/cx-buy/cx-buy';
+import './actions/ext-cx-buy/ext-cx-buy';
 import './actions/mtra/mtra';
 import './actions/refuel/refuel';
 

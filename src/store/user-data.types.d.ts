@@ -70,7 +70,14 @@ declare namespace UserData {
     materialFilter?: 'All' | 'Workforce' | 'Production';
   }
 
-  type ActionType = 'CX Buy' | 'MTRA' | 'Refuel' | 'CONT Ship' | 'CONT Trade' | 'GovBurn Data';
+  type ActionType =
+    | 'CX Buy'
+    | 'MTRA'
+    | 'Refuel'
+    | 'CONT Ship'
+    | 'CONT Trade'
+    | 'GovBurn Data'
+    | 'External CX Buy';
 
   interface ActionData {
     type: ActionType;
@@ -118,6 +125,10 @@ declare namespace UserData {
     // CONT Trade specific.
     contTradeType?: 'BUYING' | 'SELLING';
     contLocation?: string;
+
+    // External CX Buy specific: market URL (ECAPI format) and players to leave out.
+    extCxUrl?: string;
+    extCxExclude?: string;
   }
 
   interface TaskList {
