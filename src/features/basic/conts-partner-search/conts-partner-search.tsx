@@ -1,4 +1,4 @@
-import $style from './inv-search.module.css';
+import $style from '../inv-search.module.css';
 import css from '@src/utils/css-utils.module.css';
 import PrunButton from '@src/components/PrunButton.vue';
 import { contractsStore } from '@src/infrastructure/prun-api/data/contracts';
@@ -9,11 +9,64 @@ import {
 import { observeDescendantListChanged } from '@src/utils/mutation-observer';
 import { oneMicrotask } from '@src/utils/one-microtask';
 import { watchEffectWhileNodeAlive } from '@src/utils/watch';
+import { userData } from '@src/store/user-data';
+import { getPlayerName, setPlayerName } from './fio-players';
 
 type ContractKind = 'BUY' | 'SELL' | 'SHIP' | 'LOAN' | 'OTHER';
 const kindFilters: (ContractKind | 'ALL')[] = ['ALL', 'BUY', 'SELL', 'SHIP', 'LOAN', 'OTHER'];
 
 type SortKey = 'type' | 'location';
+
+// Game columns, in game order. The added cells carry their key in data-rp-col.
+const gameColumns = ['contract', 'partner', 'created', 'due', 'status', 'cmds'];
+const columns: [key: string, label: string][] = [
+  ['contract', 'Contract'],
+  ['partner', 'Partner'],
+  ['player', 'Player'],
+  ['created', 'Created'],
+  ['due', 'Due'],
+  ['status', 'Status'],
+  ['cmds', 'Cmds'],
+  ['type', 'Type'],
+  ['location', 'Location'],
+];
+
+function isAddedCell(cell: Element) {
+  return (cell as HTMLElement).dataset.rpCol !== undefined;
+}
+
+// Hides the cells of the columns turned off in the COLS picker.
+function applyColumns(row: HTMLElement) {
+  const hidden = userData.conts.hiddenColumns;
+  let gameIndex = 0;
+  for (const cell of Array.from(row.children) as HTMLElement[]) {
+    const key = cell.dataset.rpCol ?? gameColumns[gameIndex++];
+    if (key !== undefined && hidden.includes(key)) {
+      cell.dataset.rpHidden = '';
+    } else {
+      delete cell.dataset.rpHidden;
+    }
+  }
+}
+
+// Keeps the player cell right after the game partner cell when the game renders the row again.
+function keepCellAfterPartner(row: HTMLElement, cell: HTMLElement) {
+  const place = () => {
+    const partner = Array.from(row.children)
+      .filter(x => !isAddedCell(x))
+      .at(1);
+    if (partner && partner.nextElementSibling !== cell) {
+      partner.after(cell);
+    }
+    applyColumns(row);
+  };
+  place();
+  observeDescendantListChanged(row, place);
+}
+
+function getRowPartnerCode(row: HTMLElement) {
+  return getRowContract(row)?.partner.code ?? undefined;
+}
 
 // Contract type from your point of view, read from the contract conditions.
 function getContractKind(contract: PrunApi.Contract | undefined): ContractKind | undefined {
@@ -97,6 +150,67 @@ function keepCellsLast(row: HTMLElement, cells: HTMLElement[]) {
   observeDescendantListChanged(row, place);
 }
 
+// Player name of the partner. Click the cell to type the name when FIO does not know it.
+function createPlayerCell(row: HTMLElement) {
+  const cell = document.createElement('td');
+  cell.dataset.rpCol = 'player';
+  cell.style.cursor = 'pointer';
+  cell.dataset.tooltip = 'Player name from FIO. Click to change it.';
+  let editing = false;
+
+  const render = () => {
+    if (editing) {
+      return;
+    }
+    const code = getRowPartnerCode(row);
+    const name = code ? getPlayerName(code) : undefined;
+    cell.textContent = name ?? '–';
+    cell.style.color = name ? '' : '#666';
+  };
+
+  cell.addEventListener('click', e => {
+    e.stopPropagation();
+    const code = getRowPartnerCode(row);
+    if (editing || !code) {
+      return;
+    }
+    editing = true;
+    const input = document.createElement('input');
+    input.className = $style.inputText;
+    input.style.margin = '0';
+    input.style.width = '90px';
+    input.value = getPlayerName(code) ?? '';
+    cell.replaceChildren(input);
+    input.focus();
+    let done = false;
+    const finish = (save: boolean) => {
+      if (done) {
+        return;
+      }
+      done = true;
+      editing = false;
+      if (save) {
+        setPlayerName(code, input.value);
+      }
+      render();
+    };
+    input.addEventListener('keydown', ke => {
+      ke.stopPropagation();
+      if (ke.key === 'Enter') {
+        ke.preventDefault();
+        finish(true);
+      } else if (ke.key === 'Escape') {
+        finish(false);
+      }
+    });
+    input.addEventListener('blur', () => finish(true));
+  });
+
+  // Stops when the game removes the row.
+  watchEffectWhileNodeAlive(row, render);
+  return cell;
+}
+
 function onTileReady(tile: PrunTile) {
   let search = '';
   const kindFilter = ref<ContractKind | 'ALL'>('ALL');
@@ -105,6 +219,8 @@ function onTileReady(tile: PrunTile) {
   let added = false;
   let table: HTMLElement | undefined;
   let tbodyElement: HTMLElement | undefined;
+  let headerRowElement: HTMLElement | undefined;
+  const showColumnPicker = ref(false);
   const headerCells: Partial<Record<SortKey, HTMLElement>> = {};
 
   const applyToRow = (row: HTMLElement) => {
@@ -182,14 +298,18 @@ function onTileReady(tile: PrunTile) {
   };
 
   const addCells = (row: HTMLElement) => {
+    const playerCell = createPlayerCell(row);
     const typeCell = document.createElement('td');
+    typeCell.dataset.rpCol = 'type';
     const locationCell = document.createElement('td');
+    locationCell.dataset.rpCol = 'location';
     const update = () => {
       const contract = getRowContract(row);
       typeCell.textContent = getContractKind(contract) ?? '';
       locationCell.textContent = getContractLocation(contract) ?? '';
     };
     keepCellsLast(row, [typeCell, locationCell]);
+    keepCellAfterPartner(row, playerCell);
     // Stops when the game removes the row.
     watchEffectWhileNodeAlive(row, update);
   };
@@ -210,27 +330,77 @@ function onTileReady(tile: PrunTile) {
       applyToAll();
     };
 
+    const toggleColumn = (key: string) => {
+      const hidden = userData.conts.hiddenColumns;
+      const index = hidden.indexOf(key);
+      if (index === -1) {
+        hidden.push(key);
+      } else {
+        hidden.splice(index, 1);
+      }
+    };
+
     createFragmentApp(() => (
       <div>
-        <input class={$style.inputText} placeholder="Filter by partner or base" onInput={onInput} />
-        {kindFilters.map(kind => (
+        <div>
+          <input
+            class={$style.inputText}
+            placeholder="Filter by partner, player or base"
+            onInput={onInput}
+          />
+          {kindFilters.map(kind => (
+            <PrunButton
+              key={kind}
+              inline
+              dark={kindFilter.value !== kind}
+              primary={kindFilter.value === kind}
+              onClick={() => setKind(kind)}>
+              {kind}
+            </PrunButton>
+          ))}
           <PrunButton
-            key={kind}
             inline
-            dark={kindFilter.value !== kind}
-            primary={kindFilter.value === kind}
-            onClick={() => setKind(kind)}>
-            {kind}
+            dark={!showColumnPicker.value}
+            primary={showColumnPicker.value}
+            data-tooltip="Choose the columns to show"
+            onClick={() => (showColumnPicker.value = !showColumnPicker.value)}>
+            COLS
           </PrunButton>
-        ))}
+        </div>
+        {showColumnPicker.value && (
+          <div>
+            {columns.map(([key, label]) => (
+              <PrunButton
+                key={key}
+                inline
+                dark={userData.conts.hiddenColumns.includes(key)}
+                primary={!userData.conts.hiddenColumns.includes(key)}
+                onClick={() => toggleColumn(key)}>
+                {label}
+              </PrunButton>
+            ))}
+          </div>
+        )}
       </div>
     )).before(tableElement);
+
+    // Shows or hides the columns again when the choice changes.
+    watchEffectWhileNodeAlive(tableElement, () => {
+      void userData.conts.hiddenColumns.length;
+      if (headerRowElement) {
+        applyColumns(headerRowElement);
+      }
+      for (const row of Array.from(tableElement.querySelectorAll('tbody > tr'))) {
+        applyColumns(row as HTMLElement);
+      }
+    });
 
     subscribe($$(tableElement, 'thead'), thead => {
       subscribe($$(thead, 'tr'), headerRow => {
         const cells: HTMLElement[] = [];
         for (const key of ['type', 'location'] as SortKey[]) {
           const th = document.createElement('th');
+          th.dataset.rpCol = key;
           th.style.cursor = 'pointer';
           th.style.userSelect = 'none';
           th.addEventListener('click', () => onSortClick(key));
@@ -239,6 +409,11 @@ function onTileReady(tile: PrunTile) {
         }
         updateHeaders();
         keepCellsLast(headerRow, cells);
+        const playerTh = document.createElement('th');
+        playerTh.dataset.rpCol = 'player';
+        playerTh.textContent = 'Player';
+        keepCellAfterPartner(headerRow, playerTh);
+        headerRowElement = headerRow;
       });
     });
 
@@ -259,11 +434,17 @@ function matchesRow(row: HTMLElement, search: string) {
     return true;
   }
   const query = search.toLowerCase();
-  // Column 0 is the contract ID, column 1 is the partner. The base name or ID also matches.
+  // The contract ID, the partner company, the player and the base name or ID match.
   const contract = row.children[0]?.textContent?.toLowerCase() ?? '';
-  const partner = row.children[1]?.textContent?.toLowerCase() ?? '';
+  const partner = getRowContract(row)?.partner.name.toLowerCase() ?? '';
+  const player = getPlayerName(getRowPartnerCode(row))?.toLowerCase() ?? '';
   const location = getContractLocationSearchText(getRowContract(row));
-  return partner.includes(query) || contract.includes(query) || location.includes(query);
+  return (
+    partner.includes(query) ||
+    player.includes(query) ||
+    contract.includes(query) ||
+    location.includes(query)
+  );
 }
 
 function matchesKind(row: HTMLElement, kind: ContractKind | 'ALL') {
@@ -271,11 +452,12 @@ function matchesKind(row: HTMLElement, kind: ContractKind | 'ALL') {
 }
 
 function init() {
+  applyCssRule('CONTS', ['td[data-rp-hidden]', 'th[data-rp-hidden]'], css.hidden);
   tiles.observe('CONTS', onTileReady);
 }
 
 features.add(
   import.meta.url,
   init,
-  'CONTS: Adds sortable type and location columns, and filters by partner, location and type.',
+  'CONTS: Adds player, type and location columns, a column picker, and filters by partner, player, location and type.',
 );

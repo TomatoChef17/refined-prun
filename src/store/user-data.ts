@@ -86,6 +86,11 @@ export const initialUserData = deepFreeze({
     excluded: ['FK-794c', 'FK-794d'] as string[],
     reserved: {} as Record<string, number>,
   },
+  // CONTS: hidden columns, and player name per partner company code (from FIO or typed by hand).
+  conts: {
+    hiddenColumns: [] as string[],
+    players: {} as Record<string, string>,
+  },
   govburn: {
     planets: {} as Record<string, UserData.GovBurnPlanet>,
     config: {
