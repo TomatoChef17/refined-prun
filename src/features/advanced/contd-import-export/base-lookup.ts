@@ -9,7 +9,10 @@ import {
   getContractInbound,
   getPurchaseContractInbound,
 } from '@src/features/XIT/BURN/contract-inbound';
-import { getWarehouseAmounts } from '@src/features/XIT/BURN/utils';
+import { HRT_NATURAL_ID, getWarehouseAmounts } from '@src/features/XIT/BURN/utils';
+import { getContractFlows } from '@src/features/XIT/SUPPLY/supply-calc';
+import { contractsStore } from '@src/infrastructure/prun-api/data/contracts';
+import { userData } from '@src/store/user-data';
 import { BaseLookup } from './base-supply';
 
 export interface BaseOption {
@@ -80,6 +83,23 @@ export function getBaseLookup(naturalId: string | undefined): BaseLookup | undef
       usePerDay: mat.dailyAmount < 0 ? -mat.dailyAmount : 0,
     };
   };
+}
+
+// Hortus Station (HRT) warehouse stock that is free to ship: not promised in my contracts
+// and not kept aside in XIT SUPPLY.
+export function getHrtFree() {
+  const stock = getWarehouseAmounts(HRT_NATURAL_ID);
+  const flows = getContractFlows(
+    contractsStore.all.value ?? [],
+    HRT_NATURAL_ID,
+    getEntityNaturalIdFromAddress,
+  );
+  const free: Record<string, number> = {};
+  for (const [ticker, amount] of Object.entries(stock)) {
+    const reserved = (flows.reserved[ticker] ?? 0) + (userData.supply.reserved[ticker] ?? 0);
+    free[ticker] = Math.max(0, Math.floor(amount - reserved));
+  }
+  return free;
 }
 
 export { getResupplyDays };

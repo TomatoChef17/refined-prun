@@ -8,7 +8,13 @@ import { SHIP_BAYS, bayUsage, cargoLoad } from './ship-fill';
 import { parseDisplayedInteger } from './numbers';
 import { useTile } from '@src/hooks/use-tile';
 import { BaseLookup, balanceBay, needFill, sortByBaseStock } from './base-supply';
-import { getBaseLookup, getBaseOptions, getDraftBase, getResupplyDays } from './base-lookup';
+import {
+  getBaseLookup,
+  getBaseOptions,
+  getDraftBase,
+  getHrtFree,
+  getResupplyDays,
+} from './base-lookup';
 
 const materials = defineModel<MaterialEntry[]>({ required: true });
 
@@ -57,23 +63,40 @@ const daysAfter = (entries: MaterialEntry[], lookup: BaseLookup) => {
   return Number.isFinite(days) ? Math.floor(days) : undefined;
 };
 
-const baseAmounts = (stacks: DraggedStack[]): QuickAmount[] => {
+const hrtFree = computed(() => getHrtFree());
+
+// NEED and the balanced fills take the units from HRT, not from the dragged stack:
+// drag from the destination base only to pick the materials.
+const fromHrt = (stacks: DraggedStack[]): DraggedStack[] =>
+  stacks.map(stack => {
+    const listed = sumBy(
+      materials.value.filter(x => x.ticker === stack.ticker),
+      x => (x.amount > 0 ? x.amount : 0),
+    );
+    return {
+      ticker: stack.ticker,
+      quantity: Math.max(0, (hrtFree.value[stack.ticker] ?? 0) - listed),
+    };
+  });
+
+const baseAmounts = (dragged: DraggedStack[]): QuickAmount[] => {
   const lookup = baseLookup.value;
   if (!lookup) {
     return [];
   }
   const days = resupplyDays.value;
+  const stacks = fromHrt(dragged);
   const needOption: QuickAmount = {
     label: 'NEED',
     amount: sumBy(needFill(stacks, materials.value, lookup, days), x => x.amount),
-    resolve: stack => needFill([stack], materials.value, lookup, days)[0]?.amount ?? 0,
-    fill: dragged => needFill(dragged, materials.value, lookup, days),
-    title: `Units the base needs to last ${days} days: ${describe(
+    resolve: stack => needFill(fromHrt([stack]), materials.value, lookup, days)[0]?.amount ?? 0,
+    fill: list => needFill(fromHrt(list), materials.value, lookup, days),
+    title: `Units the base needs to last ${days} days, up to the free HRT stock: ${describe(
       needFill(stacks, materials.value, lookup, days),
     )}`,
   };
   const balanced = SHIP_BAYS.map<QuickAmount>(bay => {
-    const fill = (dragged: DraggedStack[]) => balanceBay(bay, materials.value, dragged, lookup);
+    const fill = (list: DraggedStack[]) => balanceBay(bay, materials.value, fromHrt(list), lookup);
     const preview = fill(stacks);
     const after = daysAfter(preview, lookup);
     return {
@@ -82,7 +105,7 @@ const baseAmounts = (stacks: DraggedStack[]): QuickAmount[] => {
       resolve: stack => fill([stack])[0]?.amount ?? 0,
       fill,
       title:
-        `${bay.label} shared so every material lasts the same days` +
+        `${bay.label} shared so every material lasts the same days, from the free HRT stock` +
         (after !== undefined ? ` (${after} d)` : '') +
         `: ${describe(preview)}`,
     };
@@ -267,7 +290,7 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
       </option>
     </select>
     <span v-if="baseLookup" :class="$style.baseHint"
-      >list in BURN Inv order · NEED {{ resupplyDays }} d</span
+      >BURN Inv order · NEED {{ resupplyDays }} d · from free HRT stock</span
     >
   </div>
   <div
