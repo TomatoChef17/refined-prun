@@ -54,5 +54,8 @@
         "https://apex.prosperousuniverse.com/*"
       ]
     }
-  ]
+  ],
+  "background": {
+    "service_worker": "refined-prun-background.js"
+  }
 }
