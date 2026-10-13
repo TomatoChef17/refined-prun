@@ -10,6 +10,7 @@ import { observeDescendantListChanged } from '@src/utils/mutation-observer';
 import { oneMicrotask } from '@src/utils/one-microtask';
 import { watchEffectWhileNodeAlive } from '@src/utils/watch';
 import { userData } from '@src/store/user-data';
+import { showBuffer } from '@src/infrastructure/prun-ui/buffers';
 import { getPlayerName, setPlayerName } from './fio-players';
 
 type ContractKind = 'BUY' | 'SELL' | 'SHIP' | 'LOAN' | 'OTHER';
@@ -57,6 +58,10 @@ function keepCellAfterPartner(row: HTMLElement, cell: HTMLElement) {
       .at(1);
     if (partner && partner.nextElementSibling !== cell) {
       partner.after(cell);
+    }
+    // Same look as the game partner cell.
+    if (partner && cell.className !== partner.className) {
+      cell.className = partner.className;
     }
     applyColumns(row);
   };
@@ -154,8 +159,6 @@ function keepCellsLast(row: HTMLElement, cells: HTMLElement[]) {
 function createPlayerCell(row: HTMLElement) {
   const cell = document.createElement('td');
   cell.dataset.rpCol = 'player';
-  cell.style.cursor = 'pointer';
-  cell.dataset.tooltip = 'Player name from FIO. Click to change it.';
   let editing = false;
 
   const render = () => {
@@ -164,14 +167,32 @@ function createPlayerCell(row: HTMLElement) {
     }
     const code = getRowPartnerCode(row);
     const name = code ? getPlayerName(code) : undefined;
-    cell.textContent = name ?? '–';
-    cell.style.color = name ? '' : '#666';
+    // Same font and color as the game partner link.
+    const partnerLink = Array.from(row.children)
+      .filter(x => !isAddedCell(x))
+      .at(1)?.firstElementChild;
+    const link = document.createElement('span');
+    link.className = partnerLink?.className ?? '';
+    link.style.cursor = 'pointer';
+    link.textContent = name ?? '–';
+    if (!name) {
+      link.style.color = '#666';
+    }
+    cell.replaceChildren(link);
+    cell.dataset.tooltip = name
+      ? 'Click to open USR. Shift+click to change the name.'
+      : 'Not found in FIO. Click to type the player name.';
   };
 
   cell.addEventListener('click', e => {
     e.stopPropagation();
     const code = getRowPartnerCode(row);
     if (editing || !code) {
+      return;
+    }
+    const name = getPlayerName(code);
+    if (name && !e.shiftKey) {
+      void showBuffer(`USR ${name}`);
       return;
     }
     editing = true;
