@@ -16,6 +16,9 @@ import SortCriteria from '@src/features/basic/inv-custom-item-sorting/SortCriter
 import { getSortingData } from '@src/store/user-data-sorting';
 import { getInvStore } from '@src/core/store-id';
 import { cxStore, getPrice } from '@src/infrastructure/fio/cx';
+import { sitesStore } from '@src/infrastructure/prun-api/data/sites';
+import { productionStore } from '@src/infrastructure/prun-api/data/production';
+import AlsoInputBadge from './AlsoInputBadge.vue';
 
 function onTileReady(tile: PrunTile) {
   subscribe($$(tile.anchor, C.InventoryView.container), container =>
@@ -78,6 +81,24 @@ async function applyCustomSorting(tile: PrunTile, container: HTMLElement) {
 
   const burn = computed(() => getPlanetBurn(storagesStore.getById(parameter)?.addressableId));
 
+  // Inputs that the production orders not started yet still take, per ticker.
+  const queuedInputs = computed(() => {
+    const totals: Record<string, number> = {};
+    const site = sitesStore.getByPlanetNaturalId(burn.value?.naturalId);
+    for (const line of productionStore.getBySiteId(site?.siteId) ?? []) {
+      for (const order of line.orders) {
+        if (order.started) {
+          continue;
+        }
+        for (const input of order.inputs) {
+          const ticker = input.material.ticker;
+          totals[ticker] = (totals[ticker] ?? 0) + input.amount;
+        }
+      }
+    }
+    return totals;
+  });
+
   const modes = computed(() => {
     const modes = sortingData.modes.slice();
     modes.push(priceSortingMode, valueSortingMode);
@@ -127,6 +148,7 @@ async function applyCustomSorting(tile: PrunTile, container: HTMLElement) {
       reverseSort.value,
       getInvStore(parameter),
     );
+    markOutputsAlsoUsed(inventory, burn.value?.burn, queuedInputs.value);
     scope.end();
     setTimeout(() => observer.observe(inventory, { childList: true, subtree: true }), 0);
   };
@@ -140,6 +162,7 @@ async function applyCustomSorting(tile: PrunTile, container: HTMLElement) {
       sortingData.active,
       sortingData.cat,
       burn.value,
+      queuedInputs.value,
       cxStore.fetched,
     ];
     if (first) {
@@ -149,6 +172,30 @@ async function applyCustomSorting(tile: PrunTile, container: HTMLElement) {
     }
     setTimeout(runSort, 50);
   });
+}
+
+// Frames the outputs that the base also uses as an input, with a tooltip badge,
+// so they are not sold out by mistake. Badges are fragment apps of the sort scope.
+function markOutputsAlsoUsed(
+  inventory: Element,
+  burn: BurnValues | undefined,
+  queued: Record<string, number>,
+) {
+  for (const div of _$$(inventory, C.GridItemView.container)) {
+    const ticker = _$(div, C.ColoredIcon.label)?.textContent ?? '';
+    const mat = burn?.[ticker];
+    if (!mat || mat.type !== 'output' || mat.input <= 0) {
+      div.classList.remove($style.alsoInput);
+      continue;
+    }
+    div.classList.add($style.alsoInput);
+    createFragmentApp(AlsoInputBadge, {
+      ticker,
+      made: mat.output,
+      used: mat.input + mat.workforce,
+      queued: queued[ticker] ?? 0,
+    }).appendTo(div);
+  }
 }
 
 function sortInventory(

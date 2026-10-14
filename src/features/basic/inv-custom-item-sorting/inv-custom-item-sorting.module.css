@@ -1,2 +1,10 @@
 .custom {
 }
+
+/* An output the base also uses as an input: do not sell it all. */
+.alsoInput {
+  position: relative;
+  outline: 2px dashed #f7a600;
+  outline-offset: -2px;
+  border-radius: 3px;
+}
