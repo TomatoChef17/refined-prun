@@ -352,80 +352,87 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
 </script>
 
 <template>
-  <div :class="[$style.baseRow, C.type.typeSmall]">
-    <span>For base</span>
-    <span v-if="draftBase">{{
-      baseOptions.find(x => x.naturalId === draftBase)?.name ?? draftBase
-    }}</span>
-    <select v-else :class="$style.baseSelect" :value="pickedBase" @change="onBasePick">
-      <option value="">none</option>
-      <option v-for="option in baseOptions" :key="option.naturalId" :value="option.naturalId">
-        {{ option.name }}
-      </option>
-    </select>
-    <span v-if="baseLookup" :class="$style.baseHint"
-      >BURN Inv order · NEED {{ resupplyDays }} d · from free HRT stock</span
-    >
-  </div>
-  <div
-    :class="[$style.dropZone, dragHover && $style.dropZoneHover]"
-    @dragenter="onZoneDragEnter"
-    @dragover="onZoneDragOver"
-    @dragleave="onZoneDragLeave"
-    @drop="onZoneDrop">
-    <div v-if="materials.length === 0 && !dragHover && !amountPrompt" :class="$style.dropZoneHint">
-      Drag a material stack here from another inventory
+  <!-- One root element, so v-show from the parent hides the whole panel. -->
+  <div>
+    <div :class="[$style.baseRow, C.type.typeSmall]">
+      <span>For base</span>
+      <span v-if="draftBase">{{
+        baseOptions.find(x => x.naturalId === draftBase)?.name ?? draftBase
+      }}</span>
+      <select v-else :class="$style.baseSelect" :value="pickedBase" @change="onBasePick">
+        <option value="">none</option>
+        <option v-for="option in baseOptions" :key="option.naturalId" :value="option.naturalId">
+          {{ option.name }}
+        </option>
+      </select>
+      <span v-if="baseLookup" :class="$style.baseHint"
+        >BURN Inv order · NEED {{ resupplyDays }} d · from free HRT stock</span
+      >
     </div>
-    <div v-for="(material, index) in materials" :key="index" :class="$style.materialRow">
-      <span :class="[$style.materialTicker, C.type.typeSmall]">{{ material.ticker }}</span>
-      <input
-        type="number"
-        :class="[
-          $style.amountInput,
-          material.level === 'partial' && $style.amountPartial,
-          material.level === 'none' && $style.amountNone,
-        ]"
-        :value="material.amount"
-        :data-tooltip="material.note"
-        @input="onAmountInput(material, $event)" />
-      <PrunButton dark inline @click="materials.splice(index, 1)">x</PrunButton>
-    </div>
-    <div v-if="amountPrompt" :class="$style.materialRow">
-      <span :class="[$style.materialTicker, C.type.typeSmall]">{{ amountPrompt.ticker }}</span>
-      <input
-        :ref="focusPrompt"
-        v-model="promptAmount"
-        type="text"
-        inputmode="numeric"
-        :class="$style.amountInput"
-        @keydown="onPromptKeydown" />
-      <PrunButton dark inline @click="confirmPrompt">add</PrunButton>
-      <PrunButton dark inline @click="amountPrompt = undefined">x</PrunButton>
-    </div>
-    <div v-if="materials.length > 0 && !dragHover" :class="[$style.loadSummary, C.type.typeSmall]">
-      {{ loadSummary }}
-    </div>
-    <div v-if="dragHover" :class="$style.dropOverlay">
-      <div :class="[$style.dropOverlayLabel, C.type.typeSmall]">
-        {{ dragHover.map(x => x.ticker).join(', ') }}
+    <div
+      :class="[$style.dropZone, dragHover && $style.dropZoneHover]"
+      @dragenter="onZoneDragEnter"
+      @dragover="onZoneDragOver"
+      @dragleave="onZoneDragLeave"
+      @drop="onZoneDrop">
+      <div
+        v-if="materials.length === 0 && !dragHover && !amountPrompt"
+        :class="$style.dropZoneHint">
+        Drag a material stack here from another inventory
+      </div>
+      <div v-for="(material, index) in materials" :key="index" :class="$style.materialRow">
+        <span :class="[$style.materialTicker, C.type.typeSmall]">{{ material.ticker }}</span>
+        <input
+          type="number"
+          :class="[
+            $style.amountInput,
+            material.level === 'partial' && $style.amountPartial,
+            material.level === 'none' && $style.amountNone,
+          ]"
+          :value="material.amount"
+          :data-tooltip="material.note"
+          @input="onAmountInput(material, $event)" />
+        <PrunButton dark inline @click="materials.splice(index, 1)">x</PrunButton>
+      </div>
+      <div v-if="amountPrompt" :class="$style.materialRow">
+        <span :class="[$style.materialTicker, C.type.typeSmall]">{{ amountPrompt.ticker }}</span>
+        <input
+          :ref="focusPrompt"
+          v-model="promptAmount"
+          type="text"
+          inputmode="numeric"
+          :class="$style.amountInput"
+          @keydown="onPromptKeydown" />
+        <PrunButton dark inline @click="confirmPrompt">add</PrunButton>
+        <PrunButton dark inline @click="amountPrompt = undefined">x</PrunButton>
       </div>
       <div
-        v-for="(option, index) in options"
-        :key="option.label"
-        :class="$style.overlayCell"
-        :title="option.title"
-        @dragover="onOptionDragOver($event, index)"
-        @drop="onOptionDrop($event, option)">
+        v-if="materials.length > 0 && !dragHover"
+        :class="[$style.loadSummary, C.type.typeSmall]">
+        {{ loadSummary }}
+      </div>
+      <div v-if="dragHover" :class="$style.dropOverlay">
+        <div :class="[$style.dropOverlayLabel, C.type.typeSmall]">
+          {{ dragHover.map(x => x.ticker).join(', ') }}
+        </div>
         <div
-          :class="[
-            C.DropTargetView.item,
-            $style.overlaySquare,
-            option.fill && $style.shipSquare,
-            option.label === 'NEED' && $style.needSquare,
-            option.fill && option.amount < 1 && $style.shipFull,
-            hoveredOption === index && C.DropTargetView.isOver,
-          ]">
-          {{ option.label }}
+          v-for="(option, index) in options"
+          :key="option.label"
+          :class="$style.overlayCell"
+          :title="option.title"
+          @dragover="onOptionDragOver($event, index)"
+          @drop="onOptionDrop($event, option)">
+          <div
+            :class="[
+              C.DropTargetView.item,
+              $style.overlaySquare,
+              option.fill && $style.shipSquare,
+              option.label === 'NEED' && $style.needSquare,
+              option.fill && option.amount < 1 && $style.shipFull,
+              hoveredOption === index && C.DropTargetView.isOver,
+            ]">
+            {{ option.label }}
+          </div>
         </div>
       </div>
     </div>
