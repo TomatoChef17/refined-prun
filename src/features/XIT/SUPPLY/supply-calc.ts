@@ -17,6 +17,9 @@ export interface SupplyCell {
   warehouse: number;
   inbound: number;
   dailyAmount: number;
+  // Units used per day by production lines and by the workforce.
+  prodUse: number;
+  wfUse: number;
 }
 
 export interface Producer {
@@ -29,6 +32,8 @@ export interface SupplyRow {
   ticker: string;
   cells: Record<string, SupplyCell>;
   totalNeed: number;
+  // Units used per day by all included bases (PROD and WF switches applied).
+  totalUse: number;
   // Fewest days left among the bases consuming this input.
   minDays: number;
   hrt: number;
@@ -75,10 +80,12 @@ export interface SupplyOptions {
   hrt: Record<string, number>;
   reserved: Record<string, number>;
   onOrder: Record<string, number>;
+  // Also list inputs of bases that make more than they use (per-day view).
+  anyUse?: boolean;
 }
 
 function consumes(mat: MaterialBurn, options: SupplyOptions) {
-  if (mat.dailyAmount >= 0) {
+  if (mat.dailyAmount >= 0 && !options.anyUse) {
     return false;
   }
   return (options.prod && mat.input > 0) || (options.wf && mat.workforce > 0);
@@ -103,6 +110,7 @@ export function buildSupplyRows(
           ticker,
           cells: {},
           totalNeed: 0,
+          totalUse: 0,
           minDays: Number.POSITIVE_INFINITY,
           hrt: 0,
           reserved: 0,
@@ -122,8 +130,11 @@ export function buildSupplyRows(
         warehouse: mat.warehouseInventory ?? 0,
         inbound: mat.inboundInventory,
         dailyAmount: mat.dailyAmount,
+        prodUse: options.prod ? mat.input : 0,
+        wfUse: options.wf ? mat.workforce : 0,
       };
       row.totalNeed += need;
+      row.totalUse += row.cells[base.naturalId].prodUse + row.cells[base.naturalId].wfUse;
       row.minDays = Math.min(row.minDays, daysAll);
     }
   }

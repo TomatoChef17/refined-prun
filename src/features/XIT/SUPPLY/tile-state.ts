@@ -5,6 +5,8 @@ export const useTileState = createTileStateHook({
   target: 'SET' as string,
   // MISSING: only inputs missing at HRT, NEED: inputs with a need, ALL: every consumed input.
   show: 'NEED' as string,
+  // Cells show the units used per day instead of the need.
+  perDay: false,
   prod: true,
   wf: true,
   // Count goods bought under purchase contracts, not delivered yet.

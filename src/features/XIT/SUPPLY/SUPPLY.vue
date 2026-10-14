@@ -12,7 +12,7 @@ import { getPrice } from '@src/infrastructure/fio/cx';
 import { showBuffer } from '@src/infrastructure/prun-ui/buffers';
 import { userData } from '@src/store/user-data';
 import { useClipboard } from '@src/hooks/use-clipboard';
-import { fixed0 } from '@src/utils/format';
+import { fixed0, fixed1 } from '@src/utils/format';
 import {
   formatBurnDays,
   getBurnThresholds,
@@ -41,6 +41,7 @@ const target = useTileState('target');
 const show = useTileState('show');
 const prod = useTileState('prod');
 const wf = useTileState('wf');
+const perDay = useTileState('perDay');
 const buyContracts = useTileState('buyContracts');
 const unchecked = useTileState('unchecked');
 
@@ -138,10 +139,19 @@ const allRows = computed(() =>
     hrt: getWarehouseAmounts(HRT_NATURAL_ID),
     reserved: reserved.value,
     onOrder: flows.value.onOrder,
+    anyUse: perDay.value,
   }),
 );
 
 const rows = computed(() => {
+  // Per-day view: every input used somewhere, most used first.
+  if (perDay.value) {
+    return allRows.value
+      .filter(x => x.totalUse > 0)
+      .sort((a, b) =>
+        b.totalUse !== a.totalUse ? b.totalUse - a.totalUse : a.ticker.localeCompare(b.ticker),
+      );
+  }
   switch (show.value) {
     case 'MISSING':
       return allRows.value.filter(x => x.missing > 0);
@@ -229,6 +239,28 @@ function cellTooltip(row: SupplyRow, naturalId: string) {
     `${fixed0(-cell.dailyAmount)}/d`,
     `${formatBurnDays(cell.daysAll)} d left`,
   ];
+  return parts.join(' · ');
+}
+
+function useOf(row: SupplyRow, naturalId: string) {
+  const cell = row.cells[naturalId] as SupplyRow['cells'][string] | undefined;
+  return cell ? cell.prodUse + cell.wfUse : 0;
+}
+
+function useTooltip(row: SupplyRow, naturalId: string) {
+  const cell = row.cells[naturalId];
+  const parts: string[] = [];
+  if (cell.prodUse > 0) {
+    parts.push(`Production ${fixed1(cell.prodUse)}/d`);
+  }
+  if (cell.wfUse > 0) {
+    parts.push(`Workers ${fixed1(cell.wfUse)}/d`);
+  }
+  const net = cell.dailyAmount;
+  parts.push(net >= 0 ? `net +${fixed1(net)}/d (made here)` : `net ${fixed1(net)}/d`);
+  if (net < 0) {
+    parts.push(`${formatBurnDays(cell.daysAll)} d left`);
+  }
   return parts.join(' · ');
 }
 
@@ -320,6 +352,13 @@ function formatWeight(value: number) {
       </RadioItem>
       <div :class="$style.separator" />
       <RadioItem
+        v-model="perDay"
+        horizontal
+        data-tooltip="Show the units each base uses per day, for every input, instead of the need."
+        data-tooltip-position="bottom">
+        /DAY
+      </RadioItem>
+      <RadioItem
         v-model="prod"
         horizontal
         data-tooltip="Inputs of production lines."
@@ -400,7 +439,7 @@ function formatWeight(value: number) {
                 </span>
               </div>
             </th>
-            <th :class="$style.sep">Σ Need</th>
+            <th :class="$style.sep">{{ perDay ? 'Σ /day' : 'Σ Need' }}</th>
             <th>HRT stock</th>
             <th>
               <span
@@ -435,7 +474,19 @@ function formatWeight(value: number) {
             </td>
             <template v-for="base in columns" :key="base.naturalId">
               <td
-                v-if="(row.cells[base.naturalId]?.need ?? 0) > 0"
+                v-if="perDay && useOf(row, base.naturalId) > 0"
+                :data-col="base.naturalId"
+                :class="[$style.need, colClass(base.naturalId)]">
+                <span :data-tooltip="useTooltip(row, base.naturalId)">
+                  {{ fixed1(useOf(row, base.naturalId)) }}
+                </span>
+              </td>
+              <td
+                v-else-if="perDay"
+                :data-col="base.naturalId"
+                :class="[$style.dot, colClass(base.naturalId)]" />
+              <td
+                v-else-if="(row.cells[base.naturalId]?.need ?? 0) > 0"
                 :data-col="base.naturalId"
                 :class="[
                   $style.need,
@@ -457,7 +508,9 @@ function formatWeight(value: number) {
                 :data-col="base.naturalId"
                 :class="[$style.dot, colClass(base.naturalId)]" />
             </template>
-            <td :class="[$style.sep, $style.total]">{{ fixed0(row.totalNeed) }}</td>
+            <td :class="[$style.sep, $style.total]">
+              {{ perDay ? fixed1(row.totalUse) : fixed0(row.totalNeed) }}
+            </td>
             <td
               :class="{
                 [$style.short]: row.missing > 0,
