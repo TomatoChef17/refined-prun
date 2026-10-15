@@ -3,7 +3,14 @@ import { ComponentPublicInstance } from 'vue';
 import PrunButton from '@src/components/PrunButton.vue';
 import { clamp } from '@src/utils/clamp';
 import { MaterialEntry } from './parsers';
-import { DraggedStack, QuickAmount, getDraggedStacks, quickAmounts, shipAmounts } from './drag';
+import {
+  DraggedStack,
+  QuickAmount,
+  getDragSourceElement,
+  getDraggedStacks,
+  quickAmounts,
+  shipAmounts,
+} from './drag';
 import { SHIP_BAYS, bayUsage, cargoLoad } from './ship-fill';
 import { parseDisplayedInteger } from './numbers';
 import { useTile } from '@src/hooks/use-tile';
@@ -15,22 +22,47 @@ import {
   getDraftBase,
   getHrtStock,
   getResupplyDays,
+  getSourceBase,
 } from './base-lookup';
 
 const materials = defineModel<MaterialEntry[]>({ required: true });
 
 const tile = useTile();
 
-// Destination base: found in the draft conditions, or picked by hand.
+// Destination base, in this order: picked for this draft (by hand or by dragging from
+// a base inventory), the draft conditions, the last base picked in any draft.
+// The draft conditions can keep an old destination, so a pick always wins.
 const pickedBaseKey = 'rprun-contd-drag-base';
+const draftPicksKey = 'rprun-contd-drag-base-by-draft';
+const readDraftPicks = (): Record<string, string> => {
+  try {
+    return JSON.parse(localStorage.getItem(draftPicksKey) ?? '{}') as Record<string, string>;
+  } catch {
+    return {};
+  }
+};
 const pickedBase = ref(localStorage.getItem(pickedBaseKey) ?? '');
+const draftPicks = ref(readDraftPicks());
+const draftKey = computed(() => tile.parameter?.toUpperCase() ?? '');
 const draftBase = computed(() => getDraftBase(tile.parameter));
 const baseOptions = computed(() => getBaseOptions());
-const baseId = computed(() => draftBase.value ?? (pickedBase.value || undefined));
-const onBasePick = (e: Event) => {
-  pickedBase.value = (e.target as HTMLSelectElement).value;
-  localStorage.setItem(pickedBaseKey, pickedBase.value);
+const baseId = computed(
+  () =>
+    (draftPicks.value[draftKey.value] || undefined) ??
+    draftBase.value ??
+    (pickedBase.value || undefined),
+);
+const pickBase = (naturalId: string) => {
+  pickedBase.value = naturalId;
+  draftPicks.value = { ...draftPicks.value, [draftKey.value]: naturalId };
+  try {
+    localStorage.setItem(pickedBaseKey, naturalId);
+    localStorage.setItem(draftPicksKey, JSON.stringify(draftPicks.value));
+  } catch {
+    // The pick still works for this session.
+  }
 };
+const onBasePick = (e: Event) => pickBase((e.target as HTMLSelectElement).value);
 const baseLookup = computed<BaseLookup | undefined>(() => getBaseLookup(baseId.value));
 const resupplyDays = computed(() => getResupplyDays(baseId.value));
 
@@ -153,9 +185,10 @@ const baseAmounts = (dragged: DraggedStack[]): QuickAmount[] => {
     resolve: stack => needFill(fromHrt([stack]), materials.value, lookup, days)[0]?.amount ?? 0,
     fill: list =>
       explain(list, needFill(fromHrt(list), materials.value, lookup, days), lookup, 'need'),
-    title: `Units the base needs to last ${days} days, up to the free HRT stock: ${describe(
-      needFill(stacks, materials.value, lookup, days),
-    )}`,
+    title:
+      `Units ${baseName.value} needs to last ${days} days, up to the free HRT stock: ` +
+      describe(needFill(stacks, materials.value, lookup, days)) +
+      reasons(explain(dragged, needFill(stacks, materials.value, lookup, days), lookup, 'need')),
   };
   const balanced = SHIP_BAYS.map<QuickAmount>(bay => {
     const balance = (list: DraggedStack[]) =>
@@ -169,13 +202,22 @@ const baseAmounts = (dragged: DraggedStack[]): QuickAmount[] => {
       resolve: stack => fill([stack])[0]?.amount ?? 0,
       fill,
       title:
-        `${bay.label} shared so every material lasts the same days, from the free HRT stock` +
+        `${bay.label} shared so every material lasts the same days at ${baseName.value},` +
+        ` from the free HRT stock` +
         (after !== undefined ? ` (${after} d)` : '') +
-        `: ${describe(preview)}`,
+        `: ${describe(preview)}` +
+        reasons(explain(dragged, preview, lookup, 'bay')),
     };
   });
   return [needOption, ...balanced];
 };
+
+// Why some materials get nothing, one line each.
+const reasons = (rows: MaterialEntry[]) =>
+  rows
+    .filter(x => x.note !== undefined && x.amount < 1)
+    .map(x => `\n${x.ticker}: ${x.note}`)
+    .join('');
 
 const describe = (entries: MaterialEntry[]) =>
   entries.map(x => `${x.amount} ${x.ticker}`).join(', ') || 'nothing';
@@ -243,6 +285,11 @@ const onZoneDragEnter = (e: DragEvent) => {
   if (!dragHover.value) {
     const stacks = getDraggedStacks();
     dragHover.value = stacks.length > 0 ? stacks : undefined;
+    // A stack dragged from a base inventory names the destination base.
+    const source = stacks.length > 0 ? getSourceBase(getDragSourceElement()) : undefined;
+    if (source && source !== baseId.value) {
+      pickBase(source);
+    }
   }
 };
 
@@ -356,13 +403,10 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
   <div>
     <div :class="[$style.baseRow, C.type.typeSmall]">
       <span>For base</span>
-      <span v-if="draftBase">{{
-        baseOptions.find(x => x.naturalId === draftBase)?.name ?? draftBase
-      }}</span>
-      <select v-else :class="$style.baseSelect" :value="pickedBase" @change="onBasePick">
+      <select :class="$style.baseSelect" :value="baseId ?? ''" @change="onBasePick">
         <option value="">none</option>
         <option v-for="option in baseOptions" :key="option.naturalId" :value="option.naturalId">
-          {{ option.name }}
+          {{ option.name }}{{ option.naturalId === draftBase ? ' (draft)' : '' }}
         </option>
       </select>
       <span v-if="baseLookup" :class="$style.baseHint"
@@ -414,6 +458,7 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
       <div v-if="dragHover" :class="$style.dropOverlay">
         <div :class="[$style.dropOverlayLabel, C.type.typeSmall]">
           {{ dragHover.map(x => x.ticker).join(', ') }}
+          <template v-if="baseLookup"> → {{ baseName }}</template>
         </div>
         <div
           v-for="(option, index) in options"
@@ -432,6 +477,11 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
               hoveredOption === index && C.DropTargetView.isOver,
             ]">
             {{ option.label }}
+          </div>
+          <div
+            v-if="option.label === 'NEED' || option.label.startsWith('=')"
+            :class="[$style.optionAmount, option.amount < 1 && $style.optionAmountNone]">
+            {{ fixed0(option.amount) }}
           </div>
         </div>
       </div>
@@ -512,8 +562,21 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
   flex: 1 1 auto;
   min-width: 36px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+}
+
+/* Units NEED and the balanced fills would add, so a 0 is visible while dragging. */
+.optionAmount {
+  font-size: 10px;
+  line-height: 12px;
+  color: rgb(136, 136, 136);
+  pointer-events: none;
+}
+
+.optionAmountNone {
+  color: rgb(217, 83, 79);
 }
 
 .overlaySquare {

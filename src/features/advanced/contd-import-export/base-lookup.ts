@@ -13,6 +13,7 @@ import { HRT_NATURAL_ID, getWarehouseAmounts } from '@src/features/XIT/BURN/util
 import { getContractFlows } from '@src/features/XIT/SUPPLY/supply-calc';
 import { contractsStore } from '@src/infrastructure/prun-api/data/contracts';
 import { userData } from '@src/store/user-data';
+import { getInvStore } from '@src/core/store-id';
 import { BaseLookup } from './base-supply';
 
 export interface BaseOption {
@@ -54,6 +55,25 @@ export function getDraftBase(draftNaturalId: string | undefined) {
     }
   }
   return undefined;
+}
+
+// The base whose inventory a drag started from, read from the INV tile command.
+// Undefined for warehouses, ships and other sources.
+export function getSourceBase(source: Element | undefined) {
+  const frame = source?.closest(`.${C.TileFrame.frame}`);
+  const command = frame ? _$(frame, C.TileFrame.cmd)?.textContent?.trim() : undefined;
+  if (!command) {
+    return undefined;
+  }
+  const space = command.indexOf(' ');
+  if (space < 0 || command.slice(0, space).toUpperCase() !== 'INV') {
+    return undefined;
+  }
+  const store = getInvStore(command.slice(space + 1));
+  if (store?.type !== 'STORE') {
+    return undefined;
+  }
+  return getEntityNaturalIdFromAddress(sitesStore.getById(store.addressableId)?.address);
 }
 
 // Stock and daily use per material at the base, counted like XIT BURN.

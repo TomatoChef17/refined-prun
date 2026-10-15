@@ -15,6 +15,11 @@ export function trackDragSource() {
   );
 }
 
+// The element the player started the last drag from.
+export function getDragSourceElement() {
+  return lastDragSource;
+}
+
 export interface DraggedStack {
   ticker: string;
   quantity: number;
