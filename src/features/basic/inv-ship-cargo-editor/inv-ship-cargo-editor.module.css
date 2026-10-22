@@ -1,0 +1,9 @@
+.amount {
+  pointer-events: auto;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    color: #f7a600;
+  }
+}
