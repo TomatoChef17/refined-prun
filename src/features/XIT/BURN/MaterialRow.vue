@@ -143,7 +143,7 @@ const hrtShort = computed(() => buyAmt.value > 0);
 <template>
   <tr v-if="isVisible">
     <td :class="$style.materialContainer">
-      <MaterialIcon size="inline-table" :ticker="material.ticker" />
+      <MaterialIcon :class="$style.icon" size="inline-table" :ticker="material.ticker" />
     </td>
     <template v-if="show.burn">
       <template v-if="io">
@@ -206,8 +206,31 @@ const hrtShort = computed(() => buyAmt.value > 0);
 }
 
 .materialContainer {
-  width: 32px;
-  padding: 0;
+  width: 44px;
+  padding: 1px 2px;
+}
+
+/* Same box for every ticker length, label centered. */
+.icon {
+  margin: 0 auto;
+
+  > div {
+    box-sizing: border-box;
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    > div {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      text-align: center;
+    }
+  }
 }
 
 .empty {
