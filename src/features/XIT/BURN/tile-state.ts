@@ -24,4 +24,6 @@ export const useTileState = createTileStateHook({
   // Columns hidden in this tile (see columns.ts).
   hiddenColumns: [] as string[],
   showColumnPicker: false,
+  // Column widths in px set by dragging the header edges. Empty = automatic widths.
+  colWidths: {} as Record<string, number>,
 });

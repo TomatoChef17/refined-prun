@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useColumnResize } from '@src/features/XIT/BURN/column-resize';
 import CopyButton from '@src/components/CopyButton.vue';
 import RadioItem from '@src/components/forms/RadioItem.vue';
 import {
@@ -120,6 +121,22 @@ const sortBy = useTileState('sortBy');
 const sortDesc = useTileState('sortDesc');
 const showColumnPicker = useTileState('showColumnPicker');
 const { show: showCol, toggle: toggleColumn } = useBurnColumns();
+
+// Header cells in display order, for the resizable column widths.
+const columnKeys = computed(() => {
+  const keys = ['mat'];
+  if (showCol.value.burn) {
+    keys.push(...(io.value ? ['in', 'out', 'burn'] : ['burn']));
+  }
+  for (const key of ['inv', 'days', 'daysAll', 'need', 'invHrt', 'buy'] as const) {
+    if (showCol.value[key]) {
+      keys.push(key);
+    }
+  }
+  keys.push('cmd');
+  return keys;
+});
+const { isFixed, tableStyle, colStyle, startResize, resetWidths } = useColumnResize(columnKeys);
 const hiddenCount = computed(() => BURN_COLUMNS.filter(x => !showCol.value[x.id]).length);
 
 // Click cycle: natural direction -> reversed -> default order.
@@ -410,27 +427,77 @@ function copyBurnTable() {
         {{ col.label }}
       </RadioItem>
     </div>
-    <table>
+    <table :class="{ [$style.fixedTable]: isFixed }" :style="tableStyle">
       <thead>
-        <tr>
-          <th v-if="planetBurn.length > 1" :class="$style.expand" @click="onExpandAllClick">
-            {{ anyExpanded ? '-' : '+' }}
-          </th>
-          <th v-else />
-          <template v-if="showCol.burn && io">
-            <th>In</th>
-            <th>Out</th>
-            <th :class="$style.sortable" @click="onSortClick('burn')"
-              >Net{{ sortArrow('burn') }}</th
+        <tr :class="$style.headerRow">
+          <th :class="$style.matHeader" data-col="mat" :style="colStyle('mat')">
+            <span v-if="planetBurn.length > 1" :class="$style.expand" @click="onExpandAllClick">
+              {{ anyExpanded ? '-' : '+' }}
+            </span>
+            <span
+              :class="$style.sortable"
+              data-tooltip="Sort materials by ticker (A–Z)."
+              @click="onSortClick('ticker')"
+              >ABC{{ sortArrow('ticker') }}</span
             >
+            <span
+              :class="$style.resizer"
+              @mousedown.stop.prevent="startResize($event, 'mat')"
+              @click.stop
+              @dblclick.stop="resetWidths" />
+          </th>
+          <template v-if="showCol.burn && io">
+            <th data-col="in" :style="colStyle('in')">
+              In
+              <span
+                :class="$style.resizer"
+                @mousedown.stop.prevent="startResize($event, 'in')"
+                @click.stop
+                @dblclick.stop="resetWidths" />
+            </th>
+            <th data-col="out" :style="colStyle('out')">
+              Out
+              <span
+                :class="$style.resizer"
+                @mousedown.stop.prevent="startResize($event, 'out')"
+                @click.stop
+                @dblclick.stop="resetWidths" />
+            </th>
+            <th
+              :class="$style.sortable"
+              data-col="burn"
+              :style="colStyle('burn')"
+              @click="onSortClick('burn')">
+              Net{{ sortArrow('burn') }}
+              <span
+                :class="$style.resizer"
+                @mousedown.stop.prevent="startResize($event, 'burn')"
+                @click.stop
+                @dblclick.stop="resetWidths" />
+            </th>
           </template>
-          <th v-else-if="showCol.burn" :class="$style.sortable" @click="onSortClick('burn')">
+          <th
+            v-else-if="showCol.burn"
+            :class="$style.sortable"
+            data-col="burn"
+            :style="colStyle('burn')"
+            @click="onSortClick('burn')">
             <InlineFlex>
               Burn{{ sortArrow('burn') }}
               <Tooltip position="bottom" tooltip="How much of a material is consumed per day." />
             </InlineFlex>
+            <span
+              :class="$style.resizer"
+              @mousedown.stop.prevent="startResize($event, 'burn')"
+              @click.stop
+              @dblclick.stop="resetWidths" />
           </th>
-          <th v-if="showCol.inv" :class="$style.sortable" @click="onSortClick('inv')">
+          <th
+            v-if="showCol.inv"
+            :class="$style.sortable"
+            data-col="inv"
+            :style="colStyle('inv')"
+            @click="onSortClick('inv')">
             <InlineFlex>
               Inv{{ sortArrow('inv') }}
               <Tooltip
@@ -438,18 +505,45 @@ function copyBurnTable() {
                 tooltip="Stock at the base plus cargo on inbound ships when enabled. Fractional amount
                  represents the leftover materials since the last workforce consumption event." />
             </InlineFlex>
+            <span
+              :class="$style.resizer"
+              @mousedown.stop.prevent="startResize($event, 'inv')"
+              @click.stop
+              @dblclick.stop="resetWidths" />
           </th>
-          <th v-if="showCol.days" :class="$style.sortable" @click="onSortClick('days')">
+          <th
+            v-if="showCol.days"
+            :class="$style.sortable"
+            data-col="days"
+            :style="colStyle('days')"
+            @click="onSortClick('days')">
             Days{{ sortArrow('days') }}
+            <span
+              :class="$style.resizer"
+              @mousedown.stop.prevent="startResize($event, 'days')"
+              @click.stop
+              @dblclick.stop="resetWidths" />
           </th>
-          <th v-if="showCol.daysAll" :class="$style.sortable" @click="onSortClick('daysAll')">
+          <th
+            v-if="showCol.daysAll"
+            :class="$style.sortable"
+            data-col="daysAll"
+            :style="colStyle('daysAll')"
+            @click="onSortClick('daysAll')">
             <span data-tooltip="Days left with the stock of the warehouse on the same planet."
               >Days All{{ sortArrow('daysAll') }}</span
             >
+            <span
+              :class="$style.resizer"
+              @mousedown.stop.prevent="startResize($event, 'daysAll')"
+              @click.stop
+              @dblclick.stop="resetWidths" />
           </th>
           <th
             v-if="showCol.need"
             :class="[$style.sortable, $style.supplyStart]"
+            data-col="need"
+            :style="colStyle('need')"
             @click="onSortClick('need')">
             <InlineFlex>
               Need{{ sortArrow('need') }}
@@ -458,20 +552,52 @@ function copyBurnTable() {
                 tooltip="How much to deliver to reach the resupply target, counting the base, inbound
                  cargo and the warehouse on the same planet (same basis as Days All)." />
             </InlineFlex>
+            <span
+              :class="$style.resizer"
+              @mousedown.stop.prevent="startResize($event, 'need')"
+              @click.stop
+              @dblclick.stop="resetWidths" />
           </th>
-          <th v-if="showCol.invHrt" :class="$style.sortable" @click="onSortClick('invHrt')">
+          <th
+            v-if="showCol.invHrt"
+            :class="$style.sortable"
+            data-col="invHrt"
+            :style="colStyle('invHrt')"
+            @click="onSortClick('invHrt')">
             <span
               data-tooltip="Stock available in your warehouse (WAR) at Hortus Station, updated live. Red when it cannot cover the need."
               >INV HRT{{ sortArrow('invHrt') }}</span
             >
+            <span
+              :class="$style.resizer"
+              @mousedown.stop.prevent="startResize($event, 'invHrt')"
+              @click.stop
+              @dblclick.stop="resetWidths" />
           </th>
-          <th v-if="showCol.buy" :class="$style.sortable" @click="onSortClick('buy')">
+          <th
+            v-if="showCol.buy"
+            :class="$style.sortable"
+            data-col="buy"
+            :style="colStyle('buy')"
+            @click="onSortClick('buy')">
             <span
               data-tooltip="Part of the need that Hortus Station cannot cover: the amount to buy."
               >Buy{{ sortArrow('buy') }}</span
             >
+            <span
+              :class="$style.resizer"
+              @mousedown.stop.prevent="startResize($event, 'buy')"
+              @click.stop
+              @dblclick.stop="resetWidths" />
           </th>
-          <th>CMD</th>
+          <th data-col="cmd" :style="colStyle('cmd')">
+            CMD
+            <span
+              :class="$style.resizer"
+              @mousedown.stop.prevent="startResize($event, 'cmd')"
+              @click.stop
+              @dblclick.stop="resetWidths" />
+          </th>
         </tr>
       </thead>
       <tbody :class="$style.fakeRow">
@@ -504,17 +630,49 @@ function copyBurnTable() {
 }
 
 .expand {
-  text-align: center;
   cursor: pointer;
   user-select: none;
   font-size: 12px;
-  padding-left: 18px;
+  margin-right: 4px;
   font-weight: bold;
 }
 
 .sortable {
   cursor: pointer;
   user-select: none;
+}
+
+.matHeader {
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.headerRow th {
+  position: relative;
+}
+
+/* Drag handle on the right edge of a header cell. Double-click resets all widths. */
+.resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+
+  &:hover {
+    background-color: rgba(247, 166, 0, 0.5);
+  }
+}
+
+.fixedTable {
+  th,
+  td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .supplyStart {

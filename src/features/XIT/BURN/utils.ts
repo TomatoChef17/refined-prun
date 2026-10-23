@@ -15,13 +15,22 @@ export { computeNeedAll, getBuyAmount, getDaysAll };
 import { warehousesStore } from '@src/infrastructure/prun-api/data/warehouses';
 import { storagesStore } from '@src/infrastructure/prun-api/data/storage';
 
-export type BurnSortKey = 'inv' | 'invHrt' | 'burn' | 'need' | 'buy' | 'days' | 'daysAll';
+export type BurnSortKey =
+  | 'ticker'
+  | 'inv'
+  | 'invHrt'
+  | 'burn'
+  | 'need'
+  | 'buy'
+  | 'days'
+  | 'daysAll';
 
 // Natural ID of Hortus Station, whose warehouse feeds the INV HRT column.
 export const HRT_NATURAL_ID = 'HRT';
 
 // Default direction when a column is first clicked.
 export const burnSortNaturalDesc: Record<BurnSortKey, boolean> = {
+  ticker: false,
   inv: false,
   invHrt: true,
   burn: false,
@@ -33,6 +42,8 @@ export const burnSortNaturalDesc: Record<BurnSortKey, boolean> = {
 
 function getSortValue(mat: MaterialBurn, key: BurnSortKey, naturalId: string) {
   switch (key) {
+    case 'ticker':
+      return 0;
     case 'inv':
       return mat.inventory + mat.inboundInventory + mat.remainingAllocation;
     case 'invHrt':
@@ -58,6 +69,9 @@ export function getSortedTickers(burn: PlanetBurn, sortBy?: string, sortDesc?: b
   }
   const key = sortBy as BurnSortKey;
   const dir = sortDesc ? -1 : 1;
+  if (key === 'ticker') {
+    return sorted.slice().sort((a, b) => a.ticker.localeCompare(b.ticker) * dir);
+  }
   // Array.prototype.sort is stable: ties keep the default material order.
   return sorted.slice().sort((a, b) => {
     const x = getSortValue(burn.burn[a.ticker], key, burn.naturalId);
