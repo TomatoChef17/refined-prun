@@ -12,7 +12,7 @@ const { ticker, made, used, queued } = defineProps<{
 
 const tooltip = computed(() => {
   const lines = [
-    `${ticker} is also an input here.`,
+    `${ticker} is also used here (production or workforce).`,
     `Made ${fixed1(made)}/day, used ${fixed1(used)}/day (net +${fixed1(made - used)}/day).`,
   ];
   if (queued > 0) {

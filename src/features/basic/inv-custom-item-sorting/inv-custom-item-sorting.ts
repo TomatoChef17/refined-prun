@@ -174,7 +174,8 @@ async function applyCustomSorting(tile: PrunTile, container: HTMLElement) {
   });
 }
 
-// Frames the outputs that the base also uses as an input, with a tooltip badge,
+// Frames the outputs that the base also uses, in production or as workforce consumables,
+// with a tooltip badge,
 // so they are not sold out by mistake. Badges are fragment apps of the sort scope.
 function markOutputsAlsoUsed(
   inventory: Element,
@@ -184,7 +185,7 @@ function markOutputsAlsoUsed(
   for (const div of _$$(inventory, C.GridItemView.container)) {
     const ticker = _$(div, C.ColoredIcon.label)?.textContent ?? '';
     const mat = burn?.[ticker];
-    if (!mat || mat.type !== 'output' || mat.input <= 0) {
+    if (!mat || mat.type !== 'output' || mat.input + mat.workforce <= 0) {
       div.classList.remove($style.alsoInput);
       continue;
     }
