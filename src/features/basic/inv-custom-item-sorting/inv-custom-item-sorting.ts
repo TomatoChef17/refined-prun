@@ -194,6 +194,8 @@ function markOutputsAlsoUsed(
       ticker,
       made: mat.output,
       used: mat.input + mat.workforce,
+      input: mat.input,
+      workforce: mat.workforce,
       queued: queued[ticker] ?? 0,
     }).appendTo(div);
   }
