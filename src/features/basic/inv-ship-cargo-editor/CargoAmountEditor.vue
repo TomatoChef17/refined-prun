@@ -101,7 +101,14 @@ function onOpenMtra() {
 </script>
 
 <template>
-  <form @submit.prevent="onOpenMtra">
+  <!-- The inventory grid handles mouse events for item selection and blocks input focus. -->
+  <form
+    :class="$style.editor"
+    @submit.prevent="onOpenMtra"
+    @mousedown.stop
+    @pointerdown.stop
+    @click.stop
+    @dragstart.stop.prevent>
     <Passive label="Material">{{ ticker }}</Passive>
     <Passive v-if="partners.length === 0" label="Partner">
       No warehouse or base here (ship in flight?)
@@ -131,7 +138,9 @@ function onOpenMtra() {
       </Commands>
       <Passive label="Range">{{ fixed0(limits.min) }} – {{ fixed0(limits.max) }}</Passive>
       <Passive label="Ship now">
-        <CargoBar :store="ship" disable-mini-mode />
+        <div :class="$style.after">
+          <CargoBar :store="ship" disable-mini-mode />
+        </div>
       </Passive>
       <Passive label="Ship after">
         <div :class="$style.after">
@@ -152,6 +161,15 @@ function onOpenMtra() {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
+}
+
+.editor {
+  user-select: text;
+
+  input {
+    user-select: text;
+    pointer-events: auto;
+  }
 }
 
 .after {
