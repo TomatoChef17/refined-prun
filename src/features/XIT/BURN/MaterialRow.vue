@@ -116,6 +116,23 @@ const outClass = computed(() => ({
   [C.ColoredValue.positive]: outAmount.value > 0,
 }));
 
+// A net producer that the base also uses: show the internal use next to the net value.
+const showUsed = computed(() => production.value > 0 && inAmount.value > 0);
+const usedText = computed(() => '-' + formatAmount(inAmount.value));
+const usedTooltip = computed(() => {
+  const parts: string[] = [];
+  if (burn.input > 0) {
+    parts.push(`production ${formatAmount(burn.input)}`);
+  }
+  if (burn.workforce > 0) {
+    parts.push(`workforce ${formatAmount(burn.workforce)}`);
+  }
+  return (
+    `Made +${formatAmount(outAmount.value)}/day, used -${formatAmount(inAmount.value)}/day ` +
+    `(${parts.join(', ')}), net ${changeText.value}/day`
+  );
+});
+
 const resupplyDays = computed(() => getResupplyDays(naturalId));
 const needAmt = computed(() => computeNeedAll(burn, resupplyDays.value));
 const buyAmt = computed(() => getBuyAmount(burn, resupplyDays.value));
@@ -142,6 +159,13 @@ const hrtShort = computed(() => buyAmt.value > 0);
       </template>
       <td v-else>
         <span :class="changeClass">{{ changeText }}</span>
+        <span
+          v-if="showUsed"
+          :class="$style.used"
+          :data-tooltip="usedTooltip"
+          data-tooltip-position="right">
+          {{ usedText }}
+        </span>
       </td>
     </template>
     <td v-if="show.inv">
@@ -170,6 +194,17 @@ const hrtShort = computed(() => buyAmt.value > 0);
 </template>
 
 <style module>
+/* Internal use of a net producer, in the row's text color, as a small pill. */
+.used {
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 2px;
+  color: #eee;
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  white-space: nowrap;
+}
+
 .materialContainer {
   width: 32px;
   padding: 0;
