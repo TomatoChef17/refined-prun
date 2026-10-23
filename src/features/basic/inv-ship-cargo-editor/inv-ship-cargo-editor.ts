@@ -5,7 +5,8 @@ import { shipsStore } from '@src/infrastructure/prun-api/data/ships';
 import { materialsStore } from '@src/infrastructure/prun-api/data/materials';
 import { showTileOverlay } from '@src/infrastructure/prun-ui/tile-overlay';
 import { showBuffer } from '@src/infrastructure/prun-ui/buffers';
-import { changeInputValue, selectMaterialInMaterialSelector } from '@src/util';
+import { changeInputValue, clickElement, selectMaterialInMaterialSelector } from '@src/util';
+import { closePrunWindow } from '@src/infrastructure/prun-ui/utils/close-prun-window';
 
 function getShipStoreId(tile: PrunTile) {
   if (tile.command === 'SHPI') {
@@ -31,14 +32,15 @@ function onTileReady(tile: PrunTile) {
         }
         e.preventDefault();
         e.stopPropagation();
-        showTileOverlay(e, CargoAmountEditor, { shipStoreId, ticker, onTransfer: openMtra });
+        showTileOverlay(e, CargoAmountEditor, { shipStoreId, ticker, onTransfer: transfer });
       });
     });
   });
 }
 
-// Opens MTRA with the material and amount filled in. The player still clicks TRANSFER.
-async function openMtra(from: string, to: string, ticker: string, amount: number) {
+// Runs one MTRA transfer for the player's TRANSFER click, like XIT ACT does.
+// The MTRA buffer stays open on error so the player can see why.
+async function transfer(from: string, to: string, ticker: string, amount: number) {
   const window = await showBuffer(`MTRA from-${from.substring(0, 8)} to-${to.substring(0, 8)}`);
   const container = await $(window, C.MaterialSelector.container);
   if (!(await selectMaterialInMaterialSelector(container, ticker))) {
@@ -49,8 +51,15 @@ async function openMtra(from: string, to: string, ticker: string, amount: number
     return;
   }
   changeInputValue(input, amount.toString());
-  input.focus();
-  input.select();
+  const button = (await $(window, C.Button.btn)) as HTMLButtonElement;
+  await clickElement(button);
+  const feedback = await Promise.any([
+    $(window, C.ActionFeedback.success),
+    $(window, C.ActionFeedback.error),
+  ]);
+  if (feedback.classList.contains(C.ActionFeedback.success)) {
+    closePrunWindow(window);
+  }
 }
 
 function init() {
@@ -60,5 +69,5 @@ function init() {
 features.add(
   import.meta.url,
   init,
-  'INV/SHPI: Click an item amount in a ship cargo to set a new amount and open MTRA prefilled.',
+  'INV/SHPI: Click an item amount in a ship cargo to set a new amount and transfer it with the local warehouse or base.',
 );

@@ -150,7 +150,7 @@ function onOpenMtra() {
       </Passive>
       <Passive label="Transfer">{{ deltaText }}</Passive>
       <Commands>
-        <PrunButton primary :disabled="delta === 0" @click="onOpenMtra">OPEN MTRA</PrunButton>
+        <PrunButton primary :disabled="delta === 0" @click="onOpenMtra">TRANSFER</PrunButton>
       </Commands>
     </template>
   </form>
