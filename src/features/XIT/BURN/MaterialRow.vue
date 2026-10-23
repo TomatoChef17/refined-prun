@@ -159,6 +159,7 @@ const hrtShort = computed(() => buyAmt.value > 0);
       </template>
       <td v-else>
         <span :class="changeClass">{{ changeText }}</span>
+        <span v-if="showUsed" :class="$style.usedSeparator">|</span>
         <span
           v-if="showUsed"
           :class="$style.used"
@@ -194,15 +195,14 @@ const hrtShort = computed(() => buyAmt.value > 0);
 </template>
 
 <style module>
-/* Internal use of a net producer, in the row's text color, as a small pill. */
+/* Internal use of a net producer, after a thin separator, in the row's text style. */
 .used {
-  margin-left: 6px;
-  padding: 0 4px;
-  border-radius: 2px;
-  color: #eee;
-  background-color: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.18);
   white-space: nowrap;
+}
+
+.usedSeparator {
+  margin: 0 4px;
+  color: #666;
 }
 
 .materialContainer {
