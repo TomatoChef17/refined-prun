@@ -49,9 +49,13 @@ function tooltip(item: OnSaleItem) {
 </script>
 
 <template>
-  <div v-if="items.length > 0" :class="$style.section">
-    <div :class="$style.title">ON SALE AT {{ exchange }} ({{ items.length }})</div>
-    <div :class="$style.grid">
+  <div :class="$style.section">
+    <div :class="$style.title">
+      ON SALE AT {{ exchange }} ({{ items.length }})
+      <span v-if="!cxosStore.fetched.value"> · loading orders…</span>
+      <span v-else-if="items.length === 0"> · no open sell order</span>
+    </div>
+    <div v-if="items.length > 0" :class="$style.grid">
       <div
         v-for="item in items"
         :key="item.ticker"
