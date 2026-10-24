@@ -12,10 +12,10 @@ function onTileReady(tile: PrunTile) {
     const warehouse = warehousesStore.getByEntityNaturalId(station);
     return store !== undefined && store.id === warehouse?.storeId;
   });
-  subscribe($$(tile.anchor, C.StoreView.container), container => {
+  subscribe($$(tile.anchor, C.InventoryView.grid), grid => {
     createFragmentApp(() =>
       isStationWarehouse.value ? <OnSaleRow exchange={exchange} /> : null,
-    ).after(container);
+    ).after(grid);
   });
 }
 
