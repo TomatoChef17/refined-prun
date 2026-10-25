@@ -83,7 +83,7 @@ export const initialUserData = deepFreeze({
   commandLists: [] as UserData.CommandList[],
   // XIT SUPPLY: bases left out (planet natural ids) and stock kept aside at HRT per ticker.
   supply: {
-    excluded: ['FK-794c', 'FK-794d'] as string[],
+    excluded: [] as string[],
     reserved: {} as Record<string, number>,
   },
   // CONTS: hidden columns, and player name per partner company code (from FIO or typed by hand).

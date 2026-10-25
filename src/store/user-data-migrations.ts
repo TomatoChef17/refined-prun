@@ -35,7 +35,7 @@ const migrations: MigrationEntry[] = [
   [
     '11.10.2026 Add XIT SUPPLY settings',
     userData => {
-      userData.supply ??= { excluded: ['FK-794c', 'FK-794d'], reserved: {} };
+      userData.supply ??= { excluded: [], reserved: {} };
       userData.supply.excluded ??= [];
       userData.supply.reserved ??= {};
     },

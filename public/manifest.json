@@ -1,12 +1,12 @@
 {
-  "name": "Refined PrUn",
+  "name": "Refined PrUn – COSM Edition",
   "version": "0.0.0",
-  "description": "Browser extension that simplifies the Prosperous Universe interface and adds useful features",
+  "description": "Unofficial fork of Refined PrUn for Prosperous Universe, with extra logistics, market and contract tools made for COSM players.",
   "manifest_version": 3,
   "minimum_chrome_version": "107",
   "browser_specific_settings": {
     "gecko": {
-      "id": "{c35c3edc-0acc-4531-b01c-35b6bede69fb}",
+      "id": "refined-prun-cosm@tomatochef17",
       "strict_min_version": "116.0"
     }
   },
@@ -57,5 +57,6 @@
   ],
   "background": {
     "service_worker": "refined-prun-background.js"
-  }
+  },
+  "short_name": "RPrUn COSM"
 }
