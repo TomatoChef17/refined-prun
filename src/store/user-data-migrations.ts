@@ -21,6 +21,7 @@ const migrations: MigrationEntry[] = [
     userData => {
       userData.conts ??= { hiddenColumns: [], players: {} };
       userData.conts.favorites ??= [];
+      userData.conts.partnerContracts ??= {};
     },
   ],
   [

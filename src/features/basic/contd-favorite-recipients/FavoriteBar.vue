@@ -1,6 +1,9 @@
 <script setup lang="ts">
-const { names, current, onPick, onRemove, onAdd } = defineProps<{
+const { names, counts, current, onPick, onRemove, onAdd } = defineProps<{
+  // Sorted with the most contracts first.
   names: string[];
+  // Contracts per name, sent and received.
+  counts: Record<string, number>;
   // Name typed in the recipient field.
   current: string;
   onPick: (name: string) => void;
@@ -38,7 +41,7 @@ function confirmAdd() {
   <div :class="$style.bar" @mousedown.stop @pointerdown.stop @click.stop>
     <div :class="$style.header">
       <span :class="$style.title">★ FAVORITE RECIPIENTS</span>
-      <span :class="$style.hint">Click a name to fill the recipient · × to remove</span>
+      <span :class="$style.hint">Most contracts first · click to fill · × to remove</span>
     </div>
     <div :class="$style.chips">
       <span
@@ -48,6 +51,13 @@ function confirmAdd() {
         @mousedown.prevent
         @click="onPick(name)">
         ★ {{ name }}
+        <span
+          v-if="(counts[name] ?? 0) > 0"
+          :class="$style.count"
+          :data-tooltip="`${counts[name]} contracts with ${name}`"
+          data-tooltip-position="top"
+          >{{ counts[name] }}</span
+        >
         <span :class="$style.remove" @click.stop="onRemove(name)">×</span>
       </span>
       <span
@@ -127,6 +137,15 @@ function confirmAdd() {
     background-color: rgba(247, 166, 0, 0.4);
     color: #fff;
   }
+}
+
+.count {
+  padding: 0 5px;
+  border-radius: 8px;
+  background-color: rgba(0, 0, 0, 0.35);
+  color: #f7a600;
+  font-size: 10px;
+  font-weight: bold;
 }
 
 .remove {

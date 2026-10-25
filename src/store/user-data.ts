@@ -92,6 +92,8 @@ export const initialUserData = deepFreeze({
     players: {} as Record<string, string>,
     // CONTD: favorite recipients, shown first when sending a contract draft.
     favorites: [] as string[],
+    // Contract id -> partner player name (lower case), kept so old contracts still count.
+    partnerContracts: {} as Record<string, string>,
   },
   govburn: {
     planets: {} as Record<string, UserData.GovBurnPlanet>,
