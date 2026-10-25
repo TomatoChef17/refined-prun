@@ -1,8 +1,6 @@
-import $style from './contd-favorite-recipients.module.css';
 import FavoriteBar from './FavoriteBar.vue';
 import { userData } from '@src/store/user-data';
 import { refValue } from '@src/utils/reactive-dom';
-import { watchEffectWhileNodeAlive } from '@src/utils/watch';
 import { changeInputValue, clickElement, focusElement } from '@src/util';
 import { sleep } from '@src/utils/sleep';
 
@@ -13,6 +11,7 @@ function isFavorite(name: string) {
 }
 
 function addFavorite(name: string) {
+  name = name.trim();
   if (name && !isFavorite(name)) {
     userData.conts.favorites = [...favorites.value, name];
   }
@@ -20,6 +19,21 @@ function addFavorite(name: string) {
 
 function removeFavorite(name: string) {
   userData.conts.favorites = favorites.value.filter(x => x.toLowerCase() !== name.toLowerCase());
+}
+
+// The game renders the search results next to the selector, so look in the whole tile.
+function getEntries(root: Element) {
+  const entries = new Set<Element>();
+  for (const cls of [C.UserSelector.suggestionEntry, C.UserSelector.suggestion]) {
+    for (const element of _$$(root, cls)) {
+      entries.add(element);
+    }
+  }
+  return [...entries];
+}
+
+function getEntryName(entry: Element) {
+  return (_$(entry, C.UserSelector.suggestionName) ?? entry).textContent?.trim();
 }
 
 // Types the name like the player does, then clicks the matching search result.
@@ -37,39 +51,11 @@ async function pickRecipient(root: Element, input: HTMLInputElement, name: strin
   }
 }
 
-// The game renders the search results next to the selector, so look in the whole tile.
-// The entry element is the closest suggestion entry around a name.
-function toEntry(element: Element) {
-  return (element.closest(`.${C.UserSelector.suggestionEntry}`) ??
-    element.closest(`.${C.UserSelector.suggestion}`) ??
-    element) as HTMLElement;
-}
-
-function getEntries(root: Element) {
-  const entries = new Set<HTMLElement>();
-  for (const cls of [
-    C.UserSelector.suggestionEntry,
-    C.UserSelector.suggestion,
-    C.UserSelector.suggestionName,
-  ]) {
-    for (const element of _$$(root, cls)) {
-      entries.add(toEntry(element));
-    }
-  }
-  return [...entries];
-}
-
-function getEntryName(entry: Element) {
-  return (_$(entry, C.UserSelector.suggestionName) ?? entry).textContent
-    ?.replace(/[★☆]/g, '')
-    .trim();
-}
-
 function onTileReady(tile: PrunTile) {
   subscribe($$(tile.anchor, C.UserSelector.container), async selector => {
     const input = (await $(selector, 'input')) as HTMLInputElement;
     const typed = refValue(input);
-    // Full-width bar above the whole Recipient row.
+    // Full-width bar under the Recipient row: the search results open above it.
     const row =
       selector.closest(`.${C.forms.formComponent}`) ??
       selector.closest(`.${C.FormComponent.containerActive}`) ??
@@ -83,60 +69,16 @@ function onTileReady(tile: PrunTile) {
         onRemove: removeFavorite,
         onAdd: addFavorite,
       }),
-    ).before(row);
-  });
-
-  for (const cls of [
-    C.UserSelector.suggestionEntry,
-    C.UserSelector.suggestion,
-    C.UserSelector.suggestionName,
-  ]) {
-    subscribe($$(tile.anchor, cls), element => addStar(toEntry(element)));
-  }
-}
-
-function addStar(entry: HTMLElement) {
-  if (entry.dataset.rpFavorite !== undefined) {
-    return;
-  }
-  const name = getEntryName(entry);
-  if (!name) {
-    return;
-  }
-  entry.dataset.rpFavorite = '';
-  entry.classList.add($style.entry);
-  const star = document.createElement('span');
-  star.classList.add($style.star);
-  star.addEventListener('mousedown', e => {
-    e.preventDefault();
-    e.stopPropagation();
-  });
-  star.addEventListener('click', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (isFavorite(name)) {
-      removeFavorite(name);
-    } else {
-      addFavorite(name);
-    }
-  });
-  entry.appendChild(star);
-  watchEffectWhileNodeAlive(entry, () => {
-    const on = isFavorite(name);
-    entry.classList.toggle($style.favoriteEntry, on);
-    star.classList.toggle($style.starOn, on);
-    star.textContent = on ? '\u2605' : '\u2606';
-    star.dataset.tooltip = on ? 'Remove from favorites' : 'Add to favorites';
+    ).after(row);
   });
 }
 
 function init() {
-  applyCssRule('CONTD', `.${C.UserSelector.suggestionsList}`, $style.suggestionsList);
   tiles.observe('CONTD', onTileReady);
 }
 
 features.add(
   import.meta.url,
   init,
-  'CONTD: Favorite recipients pinned above the recipient field and first in the search list.',
+  'CONTD: Favorite recipients as one-click chips under the recipient field.',
 );

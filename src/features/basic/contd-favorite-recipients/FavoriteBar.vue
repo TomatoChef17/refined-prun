@@ -8,62 +8,89 @@ const { names, current, onPick, onRemove, onAdd } = defineProps<{
   onAdd: (name: string) => void;
 }>();
 
-const canAdd = computed(() => {
-  const name = current.trim();
-  return name.length > 0 && !names.some(x => x.toLowerCase() === name.toLowerCase());
-});
+const editing = ref(false);
+const draftInput = useTemplateRef<HTMLInputElement>('draft-input');
+const draft = ref('');
+
+const typedName = computed(() => current.trim());
+const canAddTyped = computed(
+  () =>
+    typedName.value.length > 0 &&
+    !names.some(x => x.toLowerCase() === typedName.value.toLowerCase()),
+);
+
+function startAdd() {
+  draft.value = '';
+  editing.value = true;
+  void nextTick(() => draftInput.value?.focus());
+}
+
+function confirmAdd() {
+  if (draft.value.trim()) {
+    onAdd(draft.value);
+  }
+  editing.value = false;
+}
 </script>
 
 <template>
-  <div :class="$style.bar">
-    <span :class="$style.title">★ FAVORITES</span>
-    <span v-if="names.length === 0 && !canAdd" :class="$style.hint">
-      Click ☆ next to a name in the list to pin it here.
-    </span>
-    <span
-      v-for="name in names"
-      :key="name"
-      :class="$style.chip"
-      :data-tooltip="`Send to ${name}`"
-      data-tooltip-position="top"
-      @mousedown.prevent
-      @click="onPick(name)">
-      {{ name }}
+  <!-- The game form handles mouse events and steals focus from extension inputs. -->
+  <div :class="$style.bar" @mousedown.stop @pointerdown.stop @click.stop>
+    <div :class="$style.header">
+      <span :class="$style.title">★ FAVORITE RECIPIENTS</span>
+      <span :class="$style.hint">Click a name to fill the recipient · × to remove</span>
+    </div>
+    <div :class="$style.chips">
       <span
-        :class="$style.remove"
-        data-tooltip="Remove from favorites"
-        data-tooltip-position="top"
-        @click.stop="onRemove(name)"
-        >×</span
-      >
-    </span>
-    <span
-      v-if="canAdd"
-      :class="$style.add"
-      data-tooltip="Add the typed name to favorites"
-      data-tooltip-position="top"
-      @mousedown.prevent
-      @click="onAdd(current.trim())">
-      + ★ {{ current.trim() }}
-    </span>
+        v-for="name in names"
+        :key="name"
+        :class="$style.chip"
+        @mousedown.prevent
+        @click="onPick(name)">
+        ★ {{ name }}
+        <span :class="$style.remove" @click.stop="onRemove(name)">×</span>
+      </span>
+      <span
+        v-if="canAddTyped && !editing"
+        :class="$style.add"
+        @mousedown.prevent
+        @click="onAdd(typedName)">
+        + ★ {{ typedName }}
+      </span>
+      <form v-if="editing" :class="$style.form" @submit.prevent="confirmAdd">
+        <input
+          ref="draft-input"
+          v-model="draft"
+          :class="$style.input"
+          placeholder="Player name"
+          @keydown.esc.prevent="editing = false" />
+        <button type="submit" :class="$style.ok">OK</button>
+      </form>
+      <span v-else :class="$style.add" @click="startAdd">+ ADD</span>
+    </div>
   </div>
 </template>
 
 <style module>
 .bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   margin: 4px 0;
-  padding: 5px 6px;
-  border: 1px solid rgba(247, 166, 0, 0.45);
+  padding: 6px 8px;
+  border: 1px solid rgba(247, 166, 0, 0.5);
   border-radius: 3px;
-  background: linear-gradient(90deg, rgba(247, 166, 0, 0.12), rgba(247, 166, 0, 0.03));
+  background: linear-gradient(90deg, rgba(247, 166, 0, 0.14), rgba(247, 166, 0, 0.03));
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 5px;
 }
 
 .title {
-  margin-right: 4px;
   font-size: 10px;
   font-weight: bold;
   letter-spacing: 0.5px;
@@ -75,42 +102,49 @@ const canAdd = computed(() => {
   color: #888;
 }
 
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 4px 2px 8px;
+  gap: 5px;
+  padding: 3px 4px 3px 9px;
   border: 1px solid #f7a600;
-  border-radius: 10px;
-  background-color: rgba(247, 166, 0, 0.15);
+  border-radius: 12px;
+  background-color: rgba(247, 166, 0, 0.18);
   color: #fdd28a;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   user-select: none;
   transition: background-color 0.15s;
 
   &:hover {
-    background-color: rgba(247, 166, 0, 0.35);
+    background-color: rgba(247, 166, 0, 0.4);
     color: #fff;
   }
 }
 
 .remove {
-  padding: 0 3px;
+  padding: 0 4px;
   border-radius: 50%;
   color: #b08a4a;
   font-weight: bold;
 
   &:hover {
-    background-color: rgba(217, 83, 79, 0.6);
+    background-color: rgba(217, 83, 79, 0.7);
     color: #fff;
   }
 }
 
 .add {
-  padding: 2px 8px;
+  padding: 3px 9px;
   border: 1px dashed #f7a600;
-  border-radius: 10px;
+  border-radius: 12px;
   color: #f7a600;
   font-size: 11px;
   cursor: pointer;
@@ -119,5 +153,31 @@ const canAdd = computed(() => {
   &:hover {
     background-color: rgba(247, 166, 0, 0.2);
   }
+}
+
+.form {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.input {
+  width: 120px;
+  padding: 2px 6px;
+  border: 1px solid #f7a600;
+  border-radius: 3px;
+  background-color: #222;
+  color: #eee;
+  font-size: 11px;
+}
+
+.ok {
+  padding: 2px 8px;
+  border: none;
+  border-radius: 3px;
+  background-color: #f7a600;
+  color: #222;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
 }
 </style>
