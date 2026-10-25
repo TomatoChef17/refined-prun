@@ -7,7 +7,12 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "refined-prun-cosm@tomatochef17",
-      "strict_min_version": "116.0"
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
     }
   },
   "permissions": [
