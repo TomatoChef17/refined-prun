@@ -90,6 +90,8 @@ export const initialUserData = deepFreeze({
   conts: {
     hiddenColumns: [] as string[],
     players: {} as Record<string, string>,
+    // CONTD: favorite recipients, shown first when sending a contract draft.
+    favorites: [] as string[],
   },
   govburn: {
     planets: {} as Record<string, UserData.GovBurnPlanet>,

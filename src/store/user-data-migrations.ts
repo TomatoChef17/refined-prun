@@ -17,6 +17,13 @@ function isCheckpoint(entry: MigrationEntry): entry is Checkpoint {
 // The date is for reference only, and it does not affect migration order.
 const migrations: MigrationEntry[] = [
   [
+    '25.10.2026 Add CONTD favorite recipients',
+    userData => {
+      userData.conts ??= { hiddenColumns: [], players: {} };
+      userData.conts.favorites ??= [];
+    },
+  ],
+  [
     '13.10.2026 Add CONTS columns and players',
     userData => {
       userData.conts ??= { hiddenColumns: [], players: {} };
