@@ -52,6 +52,7 @@ async function loadUserData() {
   const userData: any = stored[userDataKey];
   try {
     await mergeSyncedNotes(userData);
+    await mergeSyncedFavorites(userData);
     if (userData) {
       await chrome.storage.local.set({ [userDataKey]: userData });
       sessionNoteIds = new Set((userData.notes as SyncNote[]).map(x => x.id));
@@ -69,6 +70,7 @@ async function loadUserData() {
       });
       window.postMessage({ type: 'rp-user-data-saved' }, '*');
       queueNotesPush(e.data.userData?.notes);
+      queueFavoritesPush(e.data.userData?.conts?.favorites);
     }
   });
   return userData;
@@ -301,6 +303,83 @@ async function pushNotes() {
   }
   deletedInSession.clear();
   await chrome.storage.local.set({ [syncStateKey]: state });
+}
+
+// CONTD favorite recipients sync through storage.sync, like the notes.
+// The newest list wins; a list changed on two PCs since the last sync is merged.
+
+interface SyncFavorites {
+  names: string[];
+  updated: number;
+}
+
+const favoritesKey = 'rp-favorites';
+const favoritesStateKey = 'rp-favorites-sync-state';
+
+function getFavoritesSignature(names: string[]) {
+  return names.join('\u0000');
+}
+
+async function getFavoritesState() {
+  const stored = await chrome.storage.local.get(favoritesStateKey);
+  return stored[favoritesStateKey] as { sig: string; updated: number } | undefined;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function mergeSyncedFavorites(userData: any) {
+  if (!userData) {
+    return;
+  }
+  userData.conts ??= {};
+  const local: string[] = Array.isArray(userData.conts.favorites) ? userData.conts.favorites : [];
+  const state = await getFavoritesState();
+  const stored = await chrome.storage.sync.get(favoritesKey);
+  const remote = stored[favoritesKey] as SyncFavorites | undefined;
+  const now = Date.now();
+  const sig = getFavoritesSignature(local);
+  const changedHere = state === undefined ? local.length > 0 : state.sig !== sig;
+  const changedThere = remote !== undefined && remote.updated > (state?.updated ?? 0);
+  let result = local;
+  if (changedHere && changedThere) {
+    const seen = new Set(local.map(x => x.toLowerCase()));
+    result = [...local, ...remote.names.filter(x => !seen.has(x.toLowerCase()))];
+  } else if (changedThere) {
+    result = remote.names;
+  }
+  userData.conts.favorites = result;
+  const updated = changedHere ? now : (remote?.updated ?? state?.updated ?? now);
+  if (changedHere) {
+    await chrome.storage.sync.set({ [favoritesKey]: { names: result, updated } });
+  }
+  await chrome.storage.local.set({
+    [favoritesStateKey]: { sig: getFavoritesSignature(result), updated },
+  });
+}
+
+let favoritesTimer: ReturnType<typeof setTimeout> | undefined;
+
+function queueFavoritesPush(names: string[] | undefined) {
+  if (!Array.isArray(names)) {
+    return;
+  }
+  if (favoritesTimer !== undefined) {
+    clearTimeout(favoritesTimer);
+  }
+  favoritesTimer = setTimeout(async () => {
+    favoritesTimer = undefined;
+    try {
+      const state = await getFavoritesState();
+      const sig = getFavoritesSignature(names);
+      if (state?.sig === sig) {
+        return;
+      }
+      const updated = Date.now();
+      await chrome.storage.sync.set({ [favoritesKey]: { names, updated } });
+      await chrome.storage.local.set({ [favoritesStateKey]: { sig, updated } });
+    } catch (e) {
+      console.warn('Refined PrUn: favorites sync failed on save', e);
+    }
+  }, 3000);
 }
 
 async function waitDocumentReady() {

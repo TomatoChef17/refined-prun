@@ -28,11 +28,22 @@ function startAdd() {
   void nextTick(() => draftInput.value?.focus());
 }
 
+// Several names can be pasted at once, separated by commas or spaces.
 function confirmAdd() {
-  if (draft.value.trim()) {
-    onAdd(draft.value);
+  for (const name of draft.value.split(/[,;\s]+/)) {
+    if (name) {
+      onAdd(name);
+    }
   }
   editing.value = false;
+}
+
+const copied = ref(false);
+
+async function copyList() {
+  await navigator.clipboard.writeText(names.join(', '));
+  copied.value = true;
+  setTimeout(() => (copied.value = false), 1500);
 }
 </script>
 
@@ -42,6 +53,14 @@ function confirmAdd() {
     <div :class="$style.header">
       <span :class="$style.title">★ FAVORITE RECIPIENTS</span>
       <span :class="$style.hint">Most contracts first · click to fill · × to remove</span>
+      <span
+        v-if="names.length > 0"
+        :class="$style.copy"
+        data-tooltip="Copy the list. Paste it in + ADD on another PC."
+        data-tooltip-position="top"
+        @click="copyList"
+        >{{ copied ? 'COPIED' : 'COPY LIST' }}</span
+      >
     </div>
     <div :class="$style.chips">
       <span
@@ -72,7 +91,7 @@ function confirmAdd() {
           ref="draft-input"
           v-model="draft"
           :class="$style.input"
-          placeholder="Player name"
+          placeholder="Name(s), comma separated"
           @keydown.esc.prevent="editing = false" />
         <button type="submit" :class="$style.ok">OK</button>
       </form>
@@ -179,8 +198,19 @@ function confirmAdd() {
   gap: 3px;
 }
 
+.copy {
+  margin-left: auto;
+  font-size: 10px;
+  color: #888;
+  cursor: pointer;
+
+  &:hover {
+    color: #f7a600;
+  }
+}
+
 .input {
-  width: 120px;
+  width: 180px;
   padding: 2px 6px;
   border: 1px solid #f7a600;
   border-radius: 3px;
