@@ -1,4 +1,5 @@
 import FavoriteBar from './FavoriteBar.vue';
+import TopRecipient from './TopRecipient.vue';
 import { userData } from '@src/store/user-data';
 import { refValue } from '@src/utils/reactive-dom';
 import { changeInputValue, clickElement, focusElement } from '@src/util';
@@ -44,6 +45,11 @@ const favorites = computed(() =>
     .sort((a, b) => (b.count !== a.count ? b.count - a.count : a.index - b.index)),
 );
 const favoriteNames = computed(() => favorites.value.map(x => x.name));
+// The favorite with the most contracts, shown next to the recipient field.
+const topFavorite = computed(() => {
+  const top = favorites.value[0];
+  return top !== undefined && top.count > 0 ? top : undefined;
+});
 
 function isFavorite(name: string) {
   return userData.conts.favorites.some(x => x.toLowerCase() === name.toLowerCase());
@@ -112,6 +118,21 @@ function onTileReady(tile: PrunTile) {
         onAdd: addFavorite,
       }),
     ).after(row);
+
+    // Between the Recipient label and the input.
+    createFragmentApp(() => {
+      const top = topFavorite.value;
+      if (!top) {
+        return null;
+      }
+      return (
+        <TopRecipient
+          name={top.name}
+          count={top.count}
+          onPick={name => void pickRecipient(tile.anchor, input, name)}
+        />
+      );
+    }).before(selector);
   });
 }
 

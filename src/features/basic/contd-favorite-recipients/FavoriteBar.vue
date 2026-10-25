@@ -64,12 +64,12 @@ async function copyList() {
     </div>
     <div :class="$style.chips">
       <span
-        v-for="name in names"
+        v-for="(name, index) in names"
         :key="name"
-        :class="$style.chip"
+        :class="[$style.chip, index === 0 && (counts[name] ?? 0) > 0 && $style.topChip]"
         @mousedown.prevent
         @click="onPick(name)">
-        ★ {{ name }}
+        {{ index === 0 && (counts[name] ?? 0) > 0 ? '♛' : '★' }} {{ name }}
         <span
           v-if="(counts[name] ?? 0) > 0"
           :class="$style.count"
@@ -155,6 +155,17 @@ async function copyList() {
   &:hover {
     background-color: rgba(247, 166, 0, 0.4);
     color: #fff;
+  }
+}
+
+.topChip {
+  border-color: #3fa2de;
+  background-color: rgba(63, 162, 222, 0.25);
+  color: #e6f4ff;
+  box-shadow: 0 0 5px rgba(63, 162, 222, 0.4);
+
+  &:hover {
+    background-color: rgba(63, 162, 222, 0.45);
   }
 }
 
