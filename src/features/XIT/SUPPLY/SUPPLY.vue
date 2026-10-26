@@ -402,7 +402,7 @@ function formatWeight(value: number) {
         :disabled="checkedMissing.length === 0"
         data-tooltip-position="bottom"
         :data-tooltip="
-          copied ? 'Copied!' : 'Copy the checked missing inputs, e.g. for #contrats on Discord.'
+          copied ? 'Copied!' : 'Copy the checked missing inputs as text, e.g. for a Discord post.'
         "
         @click="copyList">
         COPY LIST

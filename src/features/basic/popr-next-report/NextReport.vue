@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { timestampEachMinute } from '@src/utils/dayjs';
-import { formatDenseEta } from '@src/utils/format';
+import { formatDenseEta, hhmm } from '@src/utils/format';
 import { getNextReport } from './report-time';
 
 const { lastReport, exact } = defineProps<{
@@ -15,13 +15,12 @@ const next = computed(() =>
 const dateText = computed(() =>
   next.value === undefined
     ? ''
-    : new Date(next.value).toLocaleString(undefined, {
+    : // Day and month names stay in English, whatever the browser language.
+      `${new Date(next.value).toLocaleDateString('en-GB', {
         weekday: 'short',
         day: 'numeric',
         month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+      })}, ${hhmm(next.value)}`,
 );
 </script>
 
@@ -29,7 +28,7 @@ const dateText = computed(() =>
   <div
     v-if="next !== undefined"
     :class="$style.box"
-    :title="exact ? undefined : 'Estimated from the report age: up to 1 hour later.'">
+    :data-tooltip="exact ? undefined : 'Estimated from the report age: up to 1 hour later.'">
     <span :class="$style.label">Next POPR</span>
     <span :class="$style.date">{{ exact ? '' : '≈ ' }}{{ dateText }}</span>
     <span :class="$style.left">in {{ formatDenseEta(timestampEachMinute, next) }}</span>

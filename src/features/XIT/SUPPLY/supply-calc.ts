@@ -306,7 +306,7 @@ export function getContractFlows(
   return flows;
 }
 
-// "C 2146, H 1979" for the #contrats Discord channel.
+// "C 2146, H 1979" for a Discord post.
 export function formatList(rows: SupplyRow[]) {
   return rows
     .filter(x => x.missing > 0)
