@@ -12,11 +12,11 @@ const next = computed(() =>
   lastReport === undefined ? undefined : getNextReport(lastReport, timestampEachMinute.value),
 );
 
+// Day and month names stay in English, whatever the browser language.
 const dateText = computed(() =>
   next.value === undefined
     ? ''
-    : // Day and month names stay in English, whatever the browser language.
-      `${new Date(next.value).toLocaleDateString('en-GB', {
+    : `${new Date(next.value).toLocaleDateString('en-GB', {
         weekday: 'short',
         day: 'numeric',
         month: 'short',
