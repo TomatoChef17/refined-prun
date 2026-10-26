@@ -11,6 +11,7 @@
 - `SFC`: Your own destination shortcut buttons under the destination field (`sfc-custom-destinations`)
 - `SHPI`: LM context button for the local market where the ship is landed (`shpi-lm-button`)
 - `NOTS`: A click on a "CoGC program changed" notification opens the CoGC buffer with the vote (`nots-cogc-program-changed`)
+- Shift-click opens related buffers side by side: `PRODQ` + `PRODCO` from the Queue or Order button in `PROD`, `POPID` next to `POPI`, and a notification target next to `NOTS` (`shift-click-companions`)
 - `XIT ACT`: A floating action package window closes by itself after a clean run. It stays open after an error, a skipped step or a cancel
 
 ### Changed
