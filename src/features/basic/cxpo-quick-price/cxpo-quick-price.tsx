@@ -20,6 +20,7 @@ function onTileReady(tile: PrunTile) {
   });
 
   subscribe($$(tile.anchor, C.ComExPlaceOrderForm.form), form => {
+    // Other features find the form rows by index, so the bar goes last.
     // The second input of the order form is the limit price.
     const priceInput = _$$(form, 'input')[1] as HTMLInputElement | undefined;
     if (priceInput === undefined) {
@@ -31,7 +32,7 @@ function onTileReady(tile: PrunTile) {
         prices,
         onPick: (price: number) => changeInputValue(priceInput, fixed02(price)),
       }),
-    ).prependTo(form);
+    ).appendTo(form);
   });
 }
 
