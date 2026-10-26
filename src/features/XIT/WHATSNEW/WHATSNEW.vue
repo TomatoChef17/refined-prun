@@ -4,7 +4,7 @@ import PrunLink from '@src/components/PrunLink.vue';
 import PrunButton from '@src/components/PrunButton.vue';
 import getBrowserVersion from '@src/utils/browser-version';
 import fa from '@src/utils/font-awesome.module.css';
-import { ChangelogRelease } from './changelog-data';
+import { ChangelogRelease, cosmChangelog, latestCosmVersion } from './changelog-data';
 import { useChangelog } from './use-changelog';
 import { splitChangelogItem } from './changelog-links';
 import { loadVanillaCommands, VanillaCommand } from '@src/infrastructure/prun-ui/vanilla-commands';
@@ -31,38 +31,34 @@ function linkifyItem(item: string) {
   });
 }
 
-const selections = ['Report a bug', 'Make a suggestion', 'Ask a question', 'Ask a forum question'];
+// COSM Edition issues go to the COSM Edition repository, not to Refined PrUn.
+const selections = ['Report a bug', 'Make a suggestion'];
 
 function onClick(selection: number) {
-  const newIssueUrl = new URL('https://github.com/refined-prun/refined-prun/issues/new');
+  const newIssueUrl = new URL('https://github.com/TomatoChef17/refined-prun/issues/new');
   if (selection === 0) {
-    newIssueUrl.searchParams.set('template', '1_bug_report.yml');
-    newIssueUrl.searchParams.set('version', config.version.toString());
-    newIssueUrl.searchParams.set('browser', getBrowserVersion());
-  } else if (selection === 1) {
-    newIssueUrl.searchParams.set('template', '2_feature_request.yml');
-  } else if (selection === 2) {
-    newIssueUrl.searchParams.set('template', '3_discussion.md');
-  } else if (selection === 3) {
-    window.open(
-      'https://com.prosperousuniverse.com/t/refined-prun-qol-extension-for-prosperous-universe/6760/9999',
+    newIssueUrl.searchParams.set('title', '[Bug] ');
+    newIssueUrl.searchParams.set(
+      'body',
+      `Version: ${config.version}\nBrowser: ${getBrowserVersion()}\n\nWhat happened:\n`,
     );
-    return;
+  } else {
+    newIssueUrl.searchParams.set('title', '[Suggestion] ');
   }
   window.open(newIssueUrl);
 }
 
-const {
-  changelog,
-  loading,
-  failed,
-  showUnreleased,
-  canShowUnreleased,
-  latestVersion,
-  isLatestVersion,
-  currentVersion,
-  fetchData,
-} = useChangelog(config.version);
+const { changelog, loading, failed, showUnreleased, canShowUnreleased, fetchData } = useChangelog(
+  config.version,
+);
+
+// The installed version is a COSM Edition version, so it is compared with the COSM notes.
+const isLatestVersion = computed(
+  () => config.version === '0.0.0' || config.version === latestCosmVersion,
+);
+const currentVersion = computed(() =>
+  config.version === '0.0.0' ? latestCosmVersion : config.version,
+);
 
 function versionHighlightClass(release: ChangelogRelease) {
   if (release.version !== currentVersion.value) {
@@ -77,7 +73,7 @@ function versionHighlightClass(release: ChangelogRelease) {
     <div :class="$style.changelogHeader">
       <div :class="$style.versionHeader">
         <div>
-          Thanks for using Refined PrUn version:
+          Thanks for using Refined PrUn – COSM Edition version:
           <span
             :class="[
               isLatestVersion ? $style.currentVersion : $style.notCurrentVersion,
@@ -102,10 +98,9 @@ function versionHighlightClass(release: ChangelogRelease) {
           <PrunButton inline primary @click="fetchData">Retry</PrunButton>
         </div>
         <div v-else-if="isLatestVersion">You have the latest version!</div>
-        <div v-else-if="latestVersion">
-          You currently don't have the latest version, you may need to update manually.
+        <div v-else>
+          You currently don't have the latest version. Your browser store updates it soon.
         </div>
-        <div v-else>The latest released version is not available.</div>
       </div>
       <div>
         <PrunButton
@@ -119,6 +114,43 @@ function versionHighlightClass(release: ChangelogRelease) {
         </PrunButton>
       </div>
     </div>
+    <SectionHeader :class="$style.editionHeader">COSM EDITION</SectionHeader>
+    <table :class="$style.changelogTable">
+      <tbody>
+        <template v-for="release in cosmChangelog" :key="release.version">
+          <tr :class="versionHighlightClass(release)">
+            <td colspan="2" :class="$style.tableTdVersionHeader">
+              <SectionHeader :class="$style.tableSectionHeader">
+                {{ release.version }}
+              </SectionHeader>
+            </td>
+          </tr>
+          <tr
+            v-for="section in release.sections"
+            :key="section.category"
+            :class="versionHighlightClass(release)">
+            <td>{{ section.category }}</td>
+            <td>
+              <div v-for="(item, index) in section.items" :key="index">
+                -
+                <template v-for="(part, partIndex) in linkifyItem(item)" :key="partIndex">
+                  <PrunLink
+                    v-if="part.command"
+                    inline
+                    :command="part.command"
+                    :auto-submit="part.autoSubmit">
+                    {{ part.text }}
+                  </PrunLink>
+                  <strong v-else-if="part.bold">{{ part.text }}</strong>
+                  <span v-else>{{ part.text }}</span>
+                </template>
+              </div>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+    <SectionHeader :class="$style.editionHeader">BASED ON REFINED PRUN</SectionHeader>
     <table :class="$style.changelogTable">
       <tbody>
         <template v-for="release in changelog" :key="release.version">
@@ -158,6 +190,11 @@ function versionHighlightClass(release: ChangelogRelease) {
 </template>
 
 <style module>
+.editionHeader {
+  margin-top: 8px;
+  color: #3fa2de;
+}
+
 .versionHeader {
   display: flex;
   align-items: center;

@@ -22,6 +22,8 @@ const migrations: MigrationEntry[] = [
       userData.cosm ??= {};
       userData.cosm.homeStation ??= 'HRT';
       userData.cosm.sfcDestinations ??= [];
+      userData.cosm.actAutoClose ??= true;
+      userData.cosm.lastSeenVersion ??= undefined;
     },
   ],
   [

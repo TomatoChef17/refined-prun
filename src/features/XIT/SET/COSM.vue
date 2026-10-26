@@ -8,6 +8,7 @@ import TextInput from '@src/components/forms/TextInput.vue';
 import SelectInput from '@src/components/forms/SelectInput.vue';
 import Commands from '@src/components/forms/Commands.vue';
 import PrunButton from '@src/components/PrunButton.vue';
+import RadioItem from '@src/components/forms/RadioItem.vue';
 
 const stationOptions = homeStations.map(x => ({
   label: `${x.naturalId} – ${x.name} (${x.exchange})`,
@@ -41,6 +42,14 @@ function removeDestination(name: string) {
       label="Home station"
       tooltip="The station whose warehouse (WAR) and commodity exchange you use most. XIT BURN and XIT SUPPLY show its warehouse stock, and your open sell orders on its exchange show under its warehouse inventory.">
       <SelectInput v-model="userData.cosm.homeStation" :options="stationOptions" />
+    </Active>
+  </form>
+  <SectionHeader>Action Packages</SectionHeader>
+  <form @submit.prevent>
+    <Active
+      label="Auto-close ACT"
+      tooltip="Closes a floating action package window a moment after it finishes. It stays open after an error, a skipped step or a cancel.">
+      <RadioItem v-model="userData.cosm.actAutoClose">CLOSE WHEN DONE</RadioItem>
     </Active>
   </form>
   <SectionHeader>SFC Destination Shortcuts</SectionHeader>

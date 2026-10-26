@@ -1,4 +1,5 @@
 import changelogRaw from '../../../../CHANGELOG.md?raw';
+import cosmChangelogRaw from '../../../../COSM-CHANGELOG.md?raw';
 import { userData } from '@src/store/user-data';
 
 export interface ChangelogSection {
@@ -59,6 +60,20 @@ export const latestReleasedVersion = getLatestRelease(bundledChangelog)?.version
 
 export function hasUnseenChangelog(lastSeenVersion: string | undefined): boolean {
   return latestReleasedVersion !== undefined && lastSeenVersion !== latestReleasedVersion;
+}
+
+// COSM Edition release notes, shown above the Refined PrUn notes.
+export const cosmChangelog = parseChangelog(cosmChangelogRaw);
+export const latestCosmVersion = getLatestRelease(cosmChangelog)?.version;
+
+export function hasUnseenCosmChangelog(lastSeenVersion: string | undefined): boolean {
+  return latestCosmVersion !== undefined && lastSeenVersion !== latestCosmVersion;
+}
+
+export function markCosmChangelogSeen() {
+  if (latestCosmVersion !== undefined) {
+    userData.cosm.lastSeenVersion = latestCosmVersion;
+  }
 }
 
 export function markChangelogSeen() {

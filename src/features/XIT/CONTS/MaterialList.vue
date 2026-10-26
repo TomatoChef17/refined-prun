@@ -3,8 +3,13 @@ import { isSelfCondition } from '@src/features/XIT/CONTS/utils';
 import ShipmentIcon from '@src/components/ShipmentIcon.vue';
 import MaterialIcon from '@src/components/MaterialIcon.vue';
 import { objectId } from '@src/utils/object-id';
+import MoreToggle from '@src/features/XIT/CONTS/MoreToggle.vue';
 
-const { contract } = defineProps<{ contract: PrunApi.Contract }>();
+const { contract, limit, onToggle } = defineProps<{
+  contract: PrunApi.Contract;
+  limit?: number;
+  onToggle?: () => void;
+}>();
 
 interface ShipmentIconProps {
   type: 'SHIPMENT';
@@ -45,11 +50,13 @@ const icons = computed(() => {
   }
   return result;
 });
+
+const shown = computed(() => (limit === undefined ? icons.value : icons.value.slice(0, limit)));
 </script>
 
 <template>
   <div>
-    <template v-for="icon in icons" :key="objectId(icon)">
+    <template v-for="icon in shown" :key="objectId(icon)">
       <div v-if="icon.type === 'SHIPMENT'" :style="{ marginBottom: '4px' }">
         <ShipmentIcon size="medium" :shipment-id="icon.shipmentId" />
       </div>
@@ -57,6 +64,7 @@ const icons = computed(() => {
         <MaterialIcon size="medium" :ticker="icon.ticker" :amount="icon.amount" />
       </div>
     </template>
+    <MoreToggle :total="icons.length" :shown="shown.length" :on-toggle="onToggle" />
   </div>
 </template>
 

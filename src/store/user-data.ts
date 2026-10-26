@@ -87,6 +87,10 @@ export const initialUserData = deepFreeze({
     homeStation: 'HRT',
     // SFC destination shortcut buttons (natural ids or names).
     sfcDestinations: [] as string[],
+    // Closes a floating ACT window when its package finishes without errors.
+    actAutoClose: true,
+    // Last COSM Edition release shown in XIT WHATSNEW.
+    lastSeenVersion: undefined as string | undefined,
   },
   // XIT SUPPLY: bases left out (planet natural ids) and stock kept aside at HRT per ticker.
   supply: {

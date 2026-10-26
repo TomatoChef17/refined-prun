@@ -1,0 +1,15 @@
+.container {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+}
+
+.input {
+  width: 38px;
+  padding: 1px 3px;
+  border: 1px solid #3fa2de;
+  background-color: #2a2a2a;
+  color: #eee;
+  font-size: 11px;
+}

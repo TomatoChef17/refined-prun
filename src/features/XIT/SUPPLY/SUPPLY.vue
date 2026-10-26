@@ -18,7 +18,7 @@ import {
   getBurnThresholds,
   getWarehouseAmounts,
 } from '@src/features/XIT/BURN/utils';
-import { homeStation } from '@src/core/home-station';
+import { buildBuyContractJson, homeStation } from '@src/core/home-station';
 import {
   getContractInbound,
   getPurchaseContractInbound,
@@ -195,6 +195,18 @@ const { copied, copy } = useClipboard();
 
 async function copyList() {
   await copy(checkedMissing.value.map(x => `${x.ticker} ${x.missing}`).join(', '));
+}
+
+const { copied: jsonCopied, copy: copyJson } = useClipboard();
+
+// One BUY contract for the checked missing inputs, priced with the price source of XIT SET.
+async function copyBuyJson() {
+  const materials = checkedMissing.value.map(x => ({
+    ticker: x.ticker,
+    amount: x.missing,
+    price: getPrice(x.ticker) ?? undefined,
+  }));
+  await copyJson(buildBuyContractJson(homeStation.value, materials));
 }
 
 const missingValue = computed(() => {
@@ -394,6 +406,18 @@ function formatWeight(value: number) {
         "
         @click="copyList">
         COPY LIST
+      </PrunButton>
+      <PrunButton
+        primary
+        :disabled="checkedMissing.length === 0"
+        data-tooltip-position="bottom"
+        :data-tooltip="
+          jsonCopied
+            ? 'Copied! Paste it in the CONTD import box.'
+            : `Copy a BUY contract JSON for the checked inputs, delivered to ${homeStation.naturalId}. Paste it in the CONTD import box.`
+        "
+        @click="copyBuyJson">
+        BUY JSON
       </PrunButton>
     </div>
     <div v-if="excludedBases.length > 0" :class="$style.hiddenBar">

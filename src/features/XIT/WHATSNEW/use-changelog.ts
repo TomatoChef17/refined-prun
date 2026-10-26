@@ -2,6 +2,7 @@ import {
   bundledChangelog,
   getLatestRelease,
   markChangelogSeen,
+  markCosmChangelogSeen,
   parseChangelog,
 } from './changelog-data';
 
@@ -55,6 +56,7 @@ export function useChangelog(version: string) {
   }
 
   markChangelogSeen();
+  markCosmChangelogSeen();
   void fetchData();
 
   return {
