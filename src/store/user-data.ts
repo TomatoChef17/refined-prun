@@ -81,6 +81,13 @@ export const initialUserData = deepFreeze({
     folders: [] as UserData.TabFolder[],
   },
   commandLists: [] as UserData.CommandList[],
+  // COSM Edition settings (XIT SET > COSM).
+  cosm: {
+    // Natural id of the station whose warehouse and exchange are the player's trade hub.
+    homeStation: 'HRT',
+    // SFC destination shortcut buttons (natural ids or names).
+    sfcDestinations: [] as string[],
+  },
   // XIT SUPPLY: bases left out (planet natural ids) and stock kept aside at HRT per ticker.
   supply: {
     excluded: [] as string[],

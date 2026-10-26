@@ -7,7 +7,7 @@ export const BURN_COLUMNS = [
   { id: 'days', label: 'DAYS' },
   { id: 'daysAll', label: 'DAYS ALL' },
   { id: 'need', label: 'NEED' },
-  { id: 'invHrt', label: 'INV HRT' },
+  { id: 'invHrt', label: 'INV WAR' },
   { id: 'buy', label: 'BUY' },
 ] as const;
 

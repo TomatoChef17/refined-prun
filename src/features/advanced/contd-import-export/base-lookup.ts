@@ -9,7 +9,8 @@ import {
   getContractInbound,
   getPurchaseContractInbound,
 } from '@src/features/XIT/BURN/contract-inbound';
-import { HRT_NATURAL_ID, getWarehouseAmounts } from '@src/features/XIT/BURN/utils';
+import { getWarehouseAmounts } from '@src/features/XIT/BURN/utils';
+import { homeStation } from '@src/core/home-station';
 import { getContractFlows } from '@src/features/XIT/SUPPLY/supply-calc';
 import { contractsStore } from '@src/infrastructure/prun-api/data/contracts';
 import { userData } from '@src/store/user-data';
@@ -107,20 +108,21 @@ export function getBaseLookup(naturalId: string | undefined): BaseLookup | undef
 
 export interface HrtStock {
   stock: number;
-  // Still to provide from HRT in my open contracts.
+  // Still to provide from the home station in my open contracts.
   contracts: number;
   // Kept aside in XIT SUPPLY.
   kept: number;
   free: number;
 }
 
-// Hortus Station (HRT) warehouse stock that is free to ship: not promised in my contracts
+// Home station (XIT SET COSM) warehouse stock that is free to ship: not promised in my contracts
 // and not kept aside in XIT SUPPLY.
 export function getHrtStock(): (ticker: string) => HrtStock {
-  const stock = getWarehouseAmounts(HRT_NATURAL_ID);
+  const hub = homeStation.value.naturalId;
+  const stock = getWarehouseAmounts(hub);
   const flows = getContractFlows(
     contractsStore.all.value ?? [],
-    HRT_NATURAL_ID,
+    hub,
     getEntityNaturalIdFromAddress,
   );
   const kept = userData.supply.reserved;

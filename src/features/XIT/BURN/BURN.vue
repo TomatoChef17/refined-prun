@@ -35,8 +35,8 @@ import {
   getDaysAll,
   getSortedTickers,
   getWarehouseAmounts,
-  HRT_NATURAL_ID,
 } from '@src/features/XIT/BURN/utils';
+import { homeStation } from '@src/core/home-station';
 import InlineFlex from '@src/components/InlineFlex.vue';
 import { findWithQuery } from '@src/utils/find-with-query';
 import { convertToPlanetNaturalId } from '@src/core/planet-natural-id';
@@ -162,8 +162,8 @@ function sortArrow(key: BurnSortKey) {
 function filterBurn(burn: BurnValues, naturalId: string): BurnValues {
   const filtered: BurnValues = {};
   const warehouse = getWarehouseAmounts(naturalId);
-  // Read live from the Hortus Station WAR store; reactive, so it refreshes on every change.
-  const hrt = getWarehouseAmounts(HRT_NATURAL_ID);
+  // Read live from the home station WAR store; reactive, so it refreshes on every change.
+  const hrt = getWarehouseAmounts(homeStation.value.naturalId);
   // Overall ('') sums the planets, which already include their partner ships.
   const contractInbound = getContractInbound(naturalId || undefined);
   const purchaseInbound = getPurchaseContractInbound(naturalId || undefined);
@@ -328,8 +328,8 @@ function onExpandAllClick() {
 // so spreadsheet users always get the complete dataset.
 function formatBurnTable(burns: PlanetBurn[]) {
   const header = io.value
-    ? 'Planet\tTicker\tIn\tOut\tNet\tInv\tDays\tDays All\tNeed\tInv HRT\tBuy'
-    : 'Planet\tTicker\tBurn/day\tInv\tDays\tDays All\tNeed\tInv HRT\tBuy';
+    ? `Planet\tTicker\tIn\tOut\tNet\tInv\tDays\tDays All\tNeed\tInv ${homeStation.value.naturalId}\tBuy`
+    : `Planet\tTicker\tBurn/day\tInv\tDays\tDays All\tNeed\tInv ${homeStation.value.naturalId}\tBuy`;
   const lines = [header];
   const round = (x: number) => Math.round(x * 1000) / 1000;
   for (const planet of burns) {
@@ -565,8 +565,8 @@ function copyBurnTable() {
             :style="colStyle('invHrt')"
             @click="onSortClick('invHrt')">
             <span
-              data-tooltip="Stock available in your warehouse (WAR) at Hortus Station, updated live. Red when it cannot cover the need."
-              >INV HRT{{ sortArrow('invHrt') }}</span
+              :data-tooltip="`Stock available in your warehouse (WAR) at ${homeStation.name}, updated live. Red when it cannot cover the need. Change the station in XIT SET COSM.`"
+              >INV {{ homeStation.naturalId }}{{ sortArrow('invHrt') }}</span
             >
             <span
               :class="$style.resizer"
@@ -581,7 +581,7 @@ function copyBurnTable() {
             :style="colStyle('buy')"
             @click="onSortClick('buy')">
             <span
-              data-tooltip="Part of the need that Hortus Station cannot cover: the amount to buy."
+              :data-tooltip="`Part of the need that ${homeStation.name} cannot cover: the amount to buy.`"
               >Buy{{ sortArrow('buy') }}</span
             >
             <span

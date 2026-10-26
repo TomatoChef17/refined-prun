@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { homeStation } from '@src/core/home-station';
 import { ComponentPublicInstance } from 'vue';
 import PrunButton from '@src/components/PrunButton.vue';
 import { clamp } from '@src/utils/clamp';
@@ -130,7 +131,7 @@ const explain = (
     const hrt = hrtStock.value(ticker);
     const free = Math.max(0, hrt.free - listed);
     const freeText =
-      `Free at HRT: ${fixed0(free)} = stock ${fixed0(hrt.stock)}` +
+      `Free at ${homeStation.value.naturalId}: ${fixed0(free)} = stock ${fixed0(hrt.stock)}` +
       ` − my contracts ${fixed0(hrt.contracts)}` +
       ` − reserved in XIT SUPPLY ${fixed0(hrt.kept)}` +
       (listed > 0 ? ` − already listed ${fixed0(listed)}` : '') +
@@ -158,7 +159,7 @@ const explain = (
     };
   });
 
-// NEED and the balanced fills take the units from HRT, not from the dragged stack:
+// NEED and the balanced fills take the units from the home station, not from the dragged stack:
 // drag from the destination base only to pick the materials.
 const fromHrt = (stacks: DraggedStack[]): DraggedStack[] =>
   stacks.map(stack => {
@@ -186,7 +187,7 @@ const baseAmounts = (dragged: DraggedStack[]): QuickAmount[] => {
     fill: list =>
       explain(list, needFill(fromHrt(list), materials.value, lookup, days), lookup, 'need'),
     title:
-      `Units ${baseName.value} needs to last ${days} days, up to the free HRT stock: ` +
+      `Units ${baseName.value} needs to last ${days} days, up to the free ${homeStation.value.naturalId} stock: ` +
       describe(needFill(stacks, materials.value, lookup, days)) +
       reasons(explain(dragged, needFill(stacks, materials.value, lookup, days), lookup, 'need')),
   };
@@ -203,7 +204,7 @@ const baseAmounts = (dragged: DraggedStack[]): QuickAmount[] => {
       fill,
       title:
         `${bay.label} shared so every material lasts the same days at ${baseName.value},` +
-        ` from the free HRT stock` +
+        ` from the free ${homeStation.value.naturalId} stock` +
         (after !== undefined ? ` (${after} d)` : '') +
         `: ${describe(preview)}` +
         reasons(explain(dragged, preview, lookup, 'bay')),
@@ -410,7 +411,8 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
         </option>
       </select>
       <span v-if="baseLookup" :class="$style.baseHint"
-        >BURN Inv order · NEED {{ resupplyDays }} d · from free HRT stock</span
+        >BURN Inv order · NEED {{ resupplyDays }} d · from free
+        {{ homeStation.naturalId }} stock</span
       >
     </div>
     <div

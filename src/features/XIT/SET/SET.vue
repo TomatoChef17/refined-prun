@@ -6,6 +6,7 @@ import FEAT from '@src/features/XIT/SET/FEAT.vue';
 import FIN from '@src/features/XIT/SET/FIN.vue';
 import BFR from '@src/features/XIT/SET/BFR.vue';
 import ACT from '@src/features/XIT/SET/ACT.vue';
+import COSM from '@src/features/XIT/SET/COSM.vue';
 
 const tabs: Tab[] = [
   {
@@ -32,6 +33,11 @@ const tabs: Tab[] = [
     id: 'ACT',
     label: 'ACT',
     component: ACT,
+  },
+  {
+    id: 'COSM',
+    label: 'COSM',
+    component: COSM,
   },
 ];
 

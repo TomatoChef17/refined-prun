@@ -25,9 +25,6 @@ export type BurnSortKey =
   | 'days'
   | 'daysAll';
 
-// Natural ID of Hortus Station, whose warehouse feeds the INV HRT column.
-export const HRT_NATURAL_ID = 'HRT';
-
 // Default direction when a column is first clicked.
 export const burnSortNaturalDesc: Record<BurnSortKey, boolean> = {
   ticker: false,

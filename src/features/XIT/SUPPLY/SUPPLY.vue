@@ -17,8 +17,8 @@ import {
   formatBurnDays,
   getBurnThresholds,
   getWarehouseAmounts,
-  HRT_NATURAL_ID,
 } from '@src/features/XIT/BURN/utils';
+import { homeStation } from '@src/core/home-station';
 import {
   getContractInbound,
   getPurchaseContractInbound,
@@ -121,7 +121,11 @@ const excludedBases = computed(() =>
 );
 
 const flows = computed(() =>
-  getContractFlows(contractsStore.all.value ?? [], HRT_NATURAL_ID, getEntityNaturalIdFromAddress),
+  getContractFlows(
+    contractsStore.all.value ?? [],
+    homeStation.value.naturalId,
+    getEntityNaturalIdFromAddress,
+  ),
 );
 
 const reserved = computed(() => {
@@ -136,7 +140,7 @@ const allRows = computed(() =>
   buildSupplyRows(includedBases.value, allBases.value ?? [], {
     prod: prod.value,
     wf: wf.value,
-    hrt: getWarehouseAmounts(HRT_NATURAL_ID),
+    hrt: getWarehouseAmounts(homeStation.value.naturalId),
     reserved: reserved.value,
     onOrder: flows.value.onOrder,
     anyUse: perDay.value,
@@ -332,14 +336,14 @@ function formatWeight(value: number) {
       <RadioItem
         v-model="showMissing"
         horizontal
-        data-tooltip="Only inputs HRT cannot cover: to buy or bring from my bases."
+        :data-tooltip="`Only inputs ${homeStation.naturalId} cannot cover: to buy or bring from my bases.`"
         data-tooltip-position="bottom">
         MISSING
       </RadioItem>
       <RadioItem
         v-model="showNeed"
         horizontal
-        data-tooltip="Inputs at least one base needs to reach the target, even if HRT covers them."
+        :data-tooltip="`Inputs at least one base needs to reach the target, even if ${homeStation.naturalId} covers them.`"
         data-tooltip-position="bottom">
         NEED
       </RadioItem>
@@ -415,7 +419,7 @@ function formatWeight(value: number) {
             <th :class="$style.check">
               <span
                 v-if="missingRows.length > 0"
-                data-tooltip="Inputs copied by COPY LIST. Only inputs missing at HRT can be copied.">
+                :data-tooltip="`Inputs copied by COPY LIST. Only inputs missing at ${homeStation.naturalId} can be copied.`">
                 <input type="checkbox" :checked="allChecked" @change="toggleAll" />
               </span>
             </th>
@@ -440,17 +444,19 @@ function formatWeight(value: number) {
               </div>
             </th>
             <th :class="$style.sep">{{ perDay ? 'Σ /day' : 'Σ Need' }}</th>
-            <th>HRT stock</th>
+            <th>{{ homeStation.naturalId }} stock</th>
             <th>
               <span
-                data-tooltip="Kept aside at HRT: open contracts I must still provide + manual reserve.">
+                :data-tooltip="`Kept aside at ${homeStation.naturalId}: open contracts I must still provide + manual reserve.`">
                 Reserved
               </span>
             </th>
             <th>
-              <span data-tooltip="Coming to HRT through open contracts.">On order</span>
+              <span :data-tooltip="`Coming to ${homeStation.naturalId} through open contracts.`"
+                >On order</span
+              >
             </th>
-            <th>Missing at HRT</th>
+            <th>Missing at {{ homeStation.naturalId }}</th>
             <th :class="$style.left">I produce it</th>
           </tr>
         </thead>
@@ -574,7 +580,7 @@ function formatWeight(value: number) {
     </div>
     <div :class="$style.summary">
       <span>
-        Missing at HRT, value:
+        Missing at {{ homeStation.naturalId }}, value:
         <b :class="$style.red">{{ fixed0(missingValue) }}</b>
         <span :class="$style.zero"> (market price)</span>
       </span>
