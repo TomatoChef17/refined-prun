@@ -1,7 +1,7 @@
 {
   "name": "Refined PrUn – COSM Edition",
   "version": "0.0.0",
-  "description": "Unofficial fork of Refined PrUn for Prosperous Universe, with extra logistics, market and contract tools made for COSM players.",
+  "description": "Refined PrUn with extra burn, supply, contract and market tools for Prosperous Universe. Made by COSM players, for everyone.",
   "manifest_version": 3,
   "minimum_chrome_version": "107",
   "browser_specific_settings": {
