@@ -15,6 +15,11 @@ export interface BaseMaterial {
 export type BaseLookup = (ticker: string) => BaseMaterial | undefined;
 
 // Largest XIT BURN Inv first. Materials the base does not have go last, in list order.
+// Alphabetical order by ticker, so a material is easy to find in a long list.
+export function sortByTicker(entries: MaterialEntry[]) {
+  return entries.slice().sort((a, b) => a.ticker.localeCompare(b.ticker));
+}
+
 export function sortByBaseStock(entries: MaterialEntry[], base: BaseLookup) {
   const stock = (entry: MaterialEntry) => base(entry.ticker)?.inv ?? -1;
   // Array.prototype.sort is stable: equal stocks keep the list order.

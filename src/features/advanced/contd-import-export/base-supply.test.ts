@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BaseLookup, balanceBay, needFill, sortByBaseStock } from './base-supply';
+import { BaseLookup, balanceBay, needFill, sortByBaseStock, sortByTicker } from './base-supply';
 import { SHIP_BAYS, SizeLookup } from './ship-fill';
 
 const sizes: Record<string, { weight: number; volume: number }> = {
@@ -76,5 +76,16 @@ describe('balanceBay', () => {
       { ticker: 'RAT', quantity: 20 },
     ];
     expect(balanceBay(bay('LCB'), [], stacks, base, size)).toEqual([{ ticker: 'RAT', amount: 20 }]);
+  });
+});
+
+describe('sortByTicker', () => {
+  it('sorts entries alphabetically by ticker', () => {
+    const sorted = sortByTicker([
+      { ticker: 'RAT', amount: 1 },
+      { ticker: 'COF', amount: 2 },
+      { ticker: 'H2O', amount: 3 },
+    ]);
+    expect(sorted.map(x => x.ticker)).toEqual(['COF', 'H2O', 'RAT']);
   });
 });

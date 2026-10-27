@@ -15,7 +15,7 @@ import {
 import { SHIP_BAYS, bayUsage, cargoLoad } from './ship-fill';
 import { parseDisplayedInteger } from './numbers';
 import { useTile } from '@src/hooks/use-tile';
-import { BaseLookup, balanceBay, needAmount, needFill, sortByBaseStock } from './base-supply';
+import { BaseLookup, balanceBay, needAmount, needFill, sortByTicker } from './base-supply';
 import { fixed0 } from '@src/utils/format';
 import {
   getBaseLookup,
@@ -67,13 +67,9 @@ const onBasePick = (e: Event) => pickBase((e.target as HTMLSelectElement).value)
 const baseLookup = computed<BaseLookup | undefined>(() => getBaseLookup(baseId.value));
 const resupplyDays = computed(() => getResupplyDays(baseId.value));
 
-// Keeps the list in XIT BURN Inv order of the destination base, largest first.
+// Keeps the list in alphabetical order by ticker.
 const sortList = () => {
-  const lookup = baseLookup.value;
-  if (!lookup) {
-    return;
-  }
-  const sorted = sortByBaseStock(materials.value, lookup);
+  const sorted = sortByTicker(materials.value);
   if (sorted.some((x, i) => x !== materials.value[i])) {
     materials.value.splice(0, materials.value.length, ...sorted);
   }
@@ -411,8 +407,7 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
         </option>
       </select>
       <span v-if="baseLookup" :class="$style.baseHint"
-        >BURN Inv order · NEED {{ resupplyDays }} d · from free
-        {{ homeStation.naturalId }} stock</span
+        >A–Z · NEED {{ resupplyDays }} d · from free {{ homeStation.naturalId }} stock</span
       >
     </div>
     <div
