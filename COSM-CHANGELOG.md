@@ -1,5 +1,11 @@
 # COSM Edition Changelog
 
+## 26.10.69
+
+### Changed
+
+- New store summary and description. No change in the features
+
 ## 26.10.68
 
 ### New
