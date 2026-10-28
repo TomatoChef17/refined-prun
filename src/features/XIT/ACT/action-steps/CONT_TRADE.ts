@@ -1,0 +1,156 @@
+import { act } from '@src/features/XIT/ACT/act-registry';
+import { ddmm, fixed0, fixed02 } from '@src/utils/format';
+import { selectAndChangeInputValue } from '@src/util';
+import { selectAddress } from '@src/infrastructure/prun-ui/utils/select-address';
+import { AssertFn } from '@src/features/XIT/ACT/shared-types';
+import { isValidContractPrice } from '@src/features/XIT/ACT/actions/cont-limits';
+import {
+  createNewDraft,
+  setDraftNameAndPreamble,
+  saveDraftDetails,
+  openTemplate,
+  selectTemplateType,
+  setCurrency,
+  addMaterials,
+  setDeadline,
+  applyTemplate,
+  saveConditions,
+} from '@src/features/XIT/ACT/action-steps/cont-utils';
+import { billQuantities, MaterialBill } from '@src/features/XIT/ACT/material-bill';
+
+interface Data {
+  packageName: string;
+  materials: MaterialBill;
+  tradeType: 'BUYING' | 'SELLING';
+  location: string;
+  currency: string;
+  daysToFulfill: number;
+  // Player to send the draft to. Filled in the Recipient field; the player clicks SEND.
+  recipient?: string;
+}
+
+// The Recipient field of the "Send contract draft" section.
+function findRecipientInput(anchor: Element) {
+  const inputs = _$$(anchor, 'input');
+  const byPlaceholder = inputs.find(x => /user ?name/i.test(x.placeholder));
+  if (byPlaceholder) {
+    return byPlaceholder;
+  }
+  for (const input of inputs) {
+    let row = input.parentElement;
+    for (let i = 0; i < 4 && row; i++, row = row.parentElement) {
+      if (/^\s*recipient/i.test(row.textContent ?? '')) {
+        return input;
+      }
+    }
+  }
+  return undefined;
+}
+
+export const CONT_TRADE = act.addActionStep<Data>({
+  type: 'CONT_TRADE',
+  totalMaterials: data => billQuantities(data.materials, (_, quantity) => quantity > 0),
+  description: data => {
+    const materialCount = Object.keys(data.materials).length;
+    const typeLabel = data.tradeType === 'BUYING' ? 'Buy' : 'Sell';
+    const to = data.recipient ? ` for ${data.recipient}` : '';
+    return `Create ${typeLabel} contract draft${to} (${fixed0(materialCount)} materials)`;
+  },
+  execute: async ctx => {
+    const { data, log, setStatus, requestTile, waitAct, complete } = ctx;
+    const assert: AssertFn = ctx.assert;
+
+    const typeLabel = data.tradeType === 'BUYING' ? 'Buy' : 'Sell';
+
+    // Step 1: Create new draft.
+    const listTile = await requestTile('CONTD');
+    if (!listTile) {
+      return;
+    }
+
+    const newDraft = await createNewDraft(ctx, listTile);
+
+    setStatus(`Loading draft ${newDraft.naturalId}...`);
+    const draftTile = await requestTile(`CONTD ${newDraft.naturalId}`);
+    if (!draftTile) {
+      return;
+    }
+    const anchor = draftTile.anchor;
+
+    const dateStr = ddmm();
+    const contractName = `${data.packageName} - ${typeLabel} - ${dateStr}`;
+
+    const materialsList = Object.entries(data.materials)
+      .map(([ticker, { quantity: amount, price }]) => {
+        return price !== undefined
+          ? `${ticker} x${fixed0(amount)} @ ${fixed02(price)}/u`
+          : `${ticker} x${fixed0(amount)}`;
+      })
+      .join(', ');
+    const preambleText =
+      `${typeLabel} contract.\n` +
+      `Materials: ${materialsList}\n` +
+      (data.daysToFulfill > 0 ? `Fulfill within ${fixed0(data.daysToFulfill)} days` : '');
+
+    await setDraftNameAndPreamble(ctx, anchor, contractName, preambleText);
+
+    // Save draft details (name/preamble).
+    await waitAct('Save draft details?');
+    await saveDraftDetails(ctx, draftTile, newDraft.naturalId);
+
+    const templateSelect = await openTemplate(ctx, anchor);
+    selectTemplateType(ctx, templateSelect, data.tradeType);
+    await setCurrency(ctx, anchor, data.currency);
+
+    // Add materials with per-material prices.
+    const materialEntries = Object.entries(data.materials)
+      .filter(([, x]) => x.quantity > 0)
+      .map(([ticker, { quantity: amount }]) => ({ ticker, amount }));
+
+    await addMaterials(ctx, anchor, materialEntries, {
+      setPrice: (group, ticker) => {
+        // Fail on a missing price to prevent a free trade.
+        const price = data.materials[ticker].price;
+        assert(isValidContractPrice(price), `Invalid price for ${ticker}`);
+        const priceInput = _$$(group, 'input').find(x => x.inputMode === 'decimal');
+        assert(priceInput, `Could not find price input for ${ticker}`);
+        selectAndChangeInputValue(priceInput, fixed02(price));
+        log.info(`Price for ${ticker}: ${fixed02(price)} ${data.currency}`);
+      },
+    });
+
+    // Set location address.
+    const addressContainers = _$$(anchor, C.AddressSelector.container);
+    assert(
+      addressContainers.length >= 1 && data.location.length > 0,
+      'Could not find trade location control',
+    );
+    await waitAct(`Set location to ${data.location}?`);
+    const locationSet = await selectAddress(addressContainers[0], data.location);
+    assert(locationSet, `Could not select location: ${data.location}`);
+    log.info(`Location set: ${data.location}`);
+
+    setDeadline(ctx, anchor, data.daysToFulfill);
+
+    // Apply template.
+    await waitAct('Apply template?');
+    await applyTemplate(ctx, anchor, newDraft.naturalId);
+
+    // Save conditions, after the player has reviewed them.
+    await waitAct('Save conditions?');
+    await saveConditions(ctx, draftTile, newDraft.naturalId);
+
+    if (data.recipient) {
+      const recipientInput = findRecipientInput(anchor);
+      if (recipientInput) {
+        selectAndChangeInputValue(recipientInput, data.recipient);
+        log.info(`Recipient set: ${data.recipient}. Check it, then click SEND.`);
+      } else {
+        log.warning(`Could not find the Recipient field. Send the draft to ${data.recipient}.`);
+      }
+    }
+
+    log.success(`Contract draft ${newDraft.naturalId} ready to send`);
+    complete();
+  },
+});

@@ -1,0 +1,16 @@
+import { createTileStateHook } from '@src/store/user-data-tiles';
+
+export const useTileState = createTileStateHook({
+  // 'SET' uses the resupply days of XIT SET (per planet), otherwise a number of days.
+  target: 'SET' as string,
+  // MISSING: only inputs missing at HRT, NEED: inputs with a need, ALL: every consumed input.
+  show: 'NEED' as string,
+  // Cells show the units used per day instead of the need.
+  perDay: false,
+  prod: true,
+  wf: true,
+  // Count goods bought under purchase contracts, not delivered yet.
+  buyContracts: true,
+  // Missing inputs left out of COPY LIST.
+  unchecked: [] as string[],
+});

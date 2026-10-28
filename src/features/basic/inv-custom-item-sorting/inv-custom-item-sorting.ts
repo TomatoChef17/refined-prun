@@ -1,0 +1,384 @@
+import css from '@src/utils/css-utils.module.css';
+import $style from './inv-custom-item-sorting.module.css';
+import { BurnValues, getPlanetBurn } from '@src/core/burn';
+import { storagesStore } from '@src/infrastructure/prun-api/data/storage';
+import CategoryHeader from './CategoryHeader.vue';
+import InventorySortControls from './InventorySortControls.vue';
+import { materialsStore } from '@src/infrastructure/prun-api/data/materials';
+import GridMaterialIcon from '@src/components/GridMaterialIcon.vue';
+import SORT from '@src/features/XIT/SORT/SORT.vue';
+import { FragmentAppScope } from '@src/utils/vue-fragment-app';
+import { showBuffer } from '@src/infrastructure/prun-ui/buffers';
+import { sortByMaterial, sortMaterials } from '@src/core/sort-materials';
+import { watchEffectWhileNodeAlive } from '@src/utils/watch';
+import { isEmpty } from 'ts-extras';
+import SortCriteria from '@src/features/basic/inv-custom-item-sorting/SortCriteria.vue';
+import { getSortingData } from '@src/store/user-data-sorting';
+import { getInvStore } from '@src/core/store-id';
+import { cxStore, getPrice } from '@src/infrastructure/fio/cx';
+import { sitesStore } from '@src/infrastructure/prun-api/data/sites';
+import { productionStore } from '@src/infrastructure/prun-api/data/production';
+import AlsoInputBadge from './AlsoInputBadge.vue';
+
+function onTileReady(tile: PrunTile) {
+  subscribe($$(tile.anchor, C.InventoryView.container), container =>
+    applyCustomSorting(tile, container),
+  );
+}
+
+async function applyCustomSorting(tile: PrunTile, container: HTMLElement) {
+  const parameter = tile.parameter;
+  if (!parameter) {
+    return;
+  }
+
+  const store = getInvStore(parameter);
+  const sortingData = getSortingData(parameter);
+  const catSort = computed({
+    get: () => sortingData.cat ?? true,
+    set: value => (sortingData.cat = value ? undefined : false),
+  });
+  const reverseSort = computed({
+    get: () => sortingData.reverse ?? false,
+    set: value => (sortingData.reverse = value ? true : undefined),
+  });
+  const sortOptions = await $(container, C.InventorySortControls.controls);
+  const inventory = await $(container, C.InventoryView.grid);
+
+  // Enumerate children in advance because we will modify the collection in the loop.
+  const criterion = Array.from(sortOptions.children);
+
+  // Skip the first sorting option because it is the grid/list view switch.
+  for (let i = 1; i < criterion.length; i++) {
+    const option = criterion[i] as HTMLElement;
+    option.addEventListener('click', () => {
+      sortingData.active = undefined;
+      catSort.value = false;
+    });
+    const isCategorySort = i === 2;
+    if (!isCategorySort) {
+      continue;
+    }
+    createFragmentApp(
+      SortCriteria,
+      reactive({
+        label: option.textContent ?? 'CAT',
+        active: catSort,
+        reverse: reverseSort,
+        onClick: () => {
+          if (catSort.value) {
+            reverseSort.value = !reverseSort.value;
+          } else {
+            sortingData.active = undefined;
+            catSort.value = true;
+            reverseSort.value = false;
+          }
+        },
+      }),
+    ).after(option);
+    option.style.display = 'none';
+  }
+
+  const burn = computed(() => getPlanetBurn(storagesStore.getById(parameter)?.addressableId));
+
+  // Inputs that the production orders not started yet still take, per ticker.
+  const queuedInputs = computed(() => {
+    const totals: Record<string, number> = {};
+    const site = sitesStore.getByPlanetNaturalId(burn.value?.naturalId);
+    for (const line of productionStore.getBySiteId(site?.siteId) ?? []) {
+      for (const order of line.orders) {
+        if (order.started) {
+          continue;
+        }
+        for (const input of order.inputs) {
+          const ticker = input.material.ticker;
+          totals[ticker] = (totals[ticker] ?? 0) + input.amount;
+        }
+      }
+    }
+    return totals;
+  });
+
+  const modes = computed(() => {
+    const modes = sortingData.modes.slice();
+    modes.push(priceSortingMode, valueSortingMode);
+    if (burn.value) {
+      modes.push(burnSortingMode);
+    }
+    return modes;
+  });
+
+  watchEffectWhileNodeAlive(sortOptions, () => {
+    if (sortingData.active || catSort.value) {
+      sortOptions.classList.add($style.custom);
+    } else {
+      sortOptions.classList.remove($style.custom);
+    }
+  });
+
+  createFragmentApp(
+    InventorySortControls,
+    reactive({
+      sorting: modes,
+      activeSort: toRef(() => sortingData.active),
+      reverse: reverseSort,
+      onModeClick: (mode: string) => {
+        if (sortingData.active === mode) {
+          reverseSort.value = !reverseSort.value;
+        } else {
+          sortingData.active = mode;
+          catSort.value = false;
+          reverseSort.value = false;
+        }
+      },
+      onAddClick: () => showBuffer(`XIT SORT ${store?.id.substring(0, 8) ?? parameter}`),
+    }),
+  ).appendTo(sortOptions);
+
+  const activeMode = computed(() => modes.value.find(x => x.label === sortingData.active));
+
+  const scope = new FragmentAppScope();
+  const runSort = () => {
+    observer.disconnect();
+    scope.begin();
+    sortInventory(
+      inventory,
+      catSort.value ? categorySortingMode : activeMode.value,
+      burn.value?.burn,
+      reverseSort.value,
+      getInvStore(parameter),
+    );
+    markOutputsAlsoUsed(inventory, burn.value?.burn, queuedInputs.value);
+    scope.end();
+    setTimeout(() => observer.observe(inventory, { childList: true, subtree: true }), 0);
+  };
+  const observer = new MutationObserver(runSort);
+  let first = true;
+  watchEffectWhileNodeAlive(inventory, () => {
+    // Touch reactive values.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _ = [
+      sortingData.reverse,
+      sortingData.active,
+      sortingData.cat,
+      burn.value,
+      queuedInputs.value,
+      cxStore.fetched,
+    ];
+    if (first) {
+      first = false;
+      runSort();
+      return;
+    }
+    setTimeout(runSort, 50);
+  });
+}
+
+// Frames the outputs that the base also uses, in production or as workforce consumables,
+// with a tooltip badge,
+// so they are not sold out by mistake. Badges are fragment apps of the sort scope.
+function markOutputsAlsoUsed(
+  inventory: Element,
+  burn: BurnValues | undefined,
+  queued: Record<string, number>,
+) {
+  for (const div of _$$(inventory, C.GridItemView.container)) {
+    const ticker = _$(div, C.ColoredIcon.label)?.textContent ?? '';
+    const mat = burn?.[ticker];
+    if (!mat || mat.type !== 'output' || mat.input + mat.workforce <= 0) {
+      div.classList.remove($style.alsoInput);
+      continue;
+    }
+    div.classList.add($style.alsoInput);
+    createFragmentApp(AlsoInputBadge, {
+      ticker,
+      made: mat.output,
+      used: mat.input + mat.workforce,
+      input: mat.input,
+      workforce: mat.workforce,
+      queued: queued[ticker] ?? 0,
+    }).appendTo(div);
+  }
+}
+
+function sortInventory(
+  inventory: Element,
+  sorting: UserData.SortingMode | undefined,
+  burn: BurnValues | undefined,
+  reverse: boolean,
+  store?: PrunApi.Store,
+) {
+  if (!sorting) {
+    return;
+  }
+
+  if (sorting === priceSortingMode || sorting === valueSortingMode) {
+    sortByPrice(inventory, sorting === valueSortingMode, reverse, store);
+    return;
+  }
+
+  const gridItems = _$$(inventory, C.GridItemView.container).map(div => ({
+    div,
+    ticker: _$(div, C.ColoredIcon.label)?.textContent,
+  }));
+  const categories = sorting.categories.slice();
+
+  if (sorting.burn && burn) {
+    const tickers = Object.keys(burn);
+    const inputs = new Set(tickers.filter(x => burn[x].type === 'input'));
+    const outputs = new Set(tickers.filter(x => burn[x].type === 'output' && !inputs.has(x)));
+    const workforce = tickers.filter(
+      x => burn[x].type === 'workforce' && !inputs.has(x) && !outputs.has(x),
+    );
+
+    categories.push({
+      name: 'Consumables',
+      materials: workforce,
+    });
+    categories.push({
+      name: 'Inputs',
+      materials: [...inputs],
+    });
+    categories.push({
+      name: 'Outputs',
+      materials: [...outputs],
+    });
+  }
+
+  const addedItems = new Set<string>();
+  const remainingItems = new Set(gridItems);
+
+  if (reverse) {
+    categories.reverse();
+  }
+
+  for (const category of categories) {
+    let materials = category.materials
+      .filter(x => !addedItems.has(x))
+      .map(x => materialsStore.getByTicker(x))
+      .filter(x => x !== undefined);
+    if (isEmpty(materials)) {
+      continue;
+    }
+
+    createFragmentApp(CategoryHeader, { label: category.name }).appendTo(inventory);
+    materials = sortMaterials(materials);
+    if (reverse) {
+      materials.reverse();
+    }
+    for (const material of materials) {
+      const gridItem = gridItems.find(x => x.ticker === material.ticker);
+      if (gridItem) {
+        inventory.appendChild(gridItem.div);
+        remainingItems.delete(gridItem);
+      } else if (sorting.zero) {
+        createFragmentApp(GridMaterialIcon, {
+          ticker: material.ticker,
+          amount: 0,
+          warning: true,
+        }).appendTo(inventory);
+      }
+      addedItems.add(material.ticker);
+    }
+  }
+
+  if (remainingItems.size === 0) {
+    return;
+  }
+
+  if (addedItems.size > 0) {
+    createFragmentApp(CategoryHeader, { label: 'Other' }).appendTo(inventory);
+  }
+  let otherItems = [...remainingItems].map(x => ({
+    div: x.div,
+    material: materialsStore.getByTicker(x.ticker),
+  }));
+  otherItems = sortByMaterial(otherItems, x => x.material);
+  if (reverse) {
+    otherItems.reverse();
+  }
+  for (const item of otherItems) {
+    inventory.appendChild(item.div);
+  }
+}
+
+// Sorts by CX unit price (PRX) or by total stock value, price x amount (VAL).
+// Highest first; clicking again reverses. Prices follow XIT SETTINGS > Pricing.
+function sortByPrice(
+  inventory: Element,
+  byValue: boolean,
+  reverse: boolean,
+  store: PrunApi.Store | undefined,
+) {
+  const amounts = new Map<string, number>();
+  for (const item of store?.items ?? []) {
+    const ticker = item.quantity?.material.ticker;
+    if (ticker) {
+      amounts.set(ticker, (amounts.get(ticker) ?? 0) + (item.quantity?.amount ?? 0));
+    }
+  }
+
+  const items = _$$(inventory, C.GridItemView.container).map(div => {
+    const ticker = _$(div, C.ColoredIcon.label)?.textContent ?? '';
+    const price = getPrice(ticker);
+    let key = -1;
+    if (price !== undefined) {
+      key = byValue ? price * (amounts.get(ticker) ?? 0) : price;
+    }
+    return { div, ticker, key };
+  });
+
+  items.sort((a, b) => (b.key !== a.key ? b.key - a.key : a.ticker.localeCompare(b.ticker)));
+  if (reverse) {
+    items.reverse();
+  }
+  for (const item of items) {
+    inventory.appendChild(item.div);
+  }
+}
+
+const priceSortingMode = {
+  label: 'PRX',
+  categories: [],
+  burn: false,
+  zero: false,
+};
+
+const valueSortingMode = {
+  label: 'VAL',
+  categories: [],
+  burn: false,
+  zero: false,
+};
+
+const categorySortingMode = {
+  label: 'CAT',
+  categories: [],
+  burn: false,
+  zero: false,
+};
+
+const burnSortingMode = {
+  label: 'BRN',
+  categories: [],
+  burn: true,
+  zero: true,
+};
+
+function init() {
+  applyCssRule(`.${$style.custom} .${C.InventorySortControls.order} > div`, css.hidden);
+  tiles.observe(['INV', 'SHPI'], onTileReady);
+  xit.add({
+    command: 'SORT',
+    name: 'SORTING MODES',
+    description: 'Sorting mode editor.',
+    mandatoryParameters: 'Inventory Identifier',
+    component: () => SORT,
+  });
+}
+
+features.add(
+  import.meta.url,
+  init,
+  'INV/SHPI: Adds custom sorting modes to inventories, including PRX (unit price) and VAL (stock value).',
+);

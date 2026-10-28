@@ -1,0 +1,142 @@
+import { deepFreeze } from '@src/utils/deep-freeze';
+
+export const initialUserData = deepFreeze({
+  firstLoad: Date.now(),
+  lastSeenChangelogVersion: undefined as string | undefined,
+  tileState: {} as Record<string, UserData.TileState | undefined>,
+  settings: {
+    mode: undefined as 'BASIC' | 'FULL' | undefined,
+    disabled: [] as string[],
+    time: 'DEFAULT' as UserData.TimeFormat,
+    defaultChartType: 'SMOOTH' as UserData.ExchangeChartType,
+    currency: {
+      preset: 'DEFAULT' as UserData.CurrencyPreset,
+      custom: '$',
+      position: 'BEFORE' as UserData.CurrencyPosition,
+      spacing: 'NO_SPACE' as UserData.CurrencySpacing,
+    },
+    financial: {
+      mmMaterials: 'IDC,EDC',
+      ignoredMaterials: 'HEX,JUI',
+    },
+    pricing: {
+      exchange: 'UNIVERSE',
+      method: 'DEFAULT' as UserData.PricingMethod,
+    },
+    burn: {
+      red: 3,
+      yellow: 7,
+      resupply: 16,
+      planetResupply: {} as Record<string, number>,
+      // Planet natural id -> ship-size label from core/ship-sizes.
+      planetPickup: {} as Record<string, string>,
+    },
+    flow: {
+      overrides: {} as Record<string, UserData.PriceOverride>,
+    },
+    repair: {
+      threshold: 60,
+      offset: 10,
+      planetOverrides: {} as Record<string, { threshold?: number; offset?: number }>,
+    },
+    noBuy: [] as string[],
+    sidebar: [
+      ['BS', 'BS'],
+      ['CONT', 'XIT CONTS'],
+      ['COM', 'COM'],
+      ['CORP', 'CORP'],
+      ['CXL', 'CXL'],
+      ['FIN', 'XIT FIN'],
+      ['FLT', 'FLT'],
+      ['INV', 'INV'],
+      ['MAP', 'MU'],
+      ['PROD', 'PROD'],
+      ['LEAD', 'LEAD'],
+      ['CMDS', 'CMDS'],
+      ['ACT', 'XIT ACT'],
+      ['BURN', 'XIT BURN'],
+      ['REP', 'XIT REP'],
+      ['SET', 'XIT SET'],
+      ['HELP', 'XIT HELP'],
+    ] as [string, string][],
+    buffers: [] as [string, number, number][],
+    audioVolume: 0.4,
+    contextMenuExchange: 'AI1' as UserData.Exchange,
+    cxmOrder: ['AI1', 'CI1', 'CI2', 'IC1', 'NC1', 'NC2'] as UserData.Exchange[],
+  },
+  sorting: {} as Record<string, UserData.StoreSortingData>,
+  balanceHistory: {
+    v1: [],
+    v2: [],
+  } as UserData.BalanceHistory,
+  fullEquityMode: true,
+  notes: [] as UserData.Note[],
+  actionPackages: [] as UserData.ActionPackageData[],
+  systemMessages: [] as UserData.SystemMessages[],
+  todo: [] as UserData.TaskList[],
+  tabs: {
+    order: [] as string[],
+    hidden: [] as string[],
+    locked: [] as string[],
+    folders: [] as UserData.TabFolder[],
+  },
+  commandLists: [] as UserData.CommandList[],
+  // COSM Edition settings (XIT SET > COSM).
+  cosm: {
+    // Natural id of the station whose warehouse and exchange are the player's trade hub.
+    homeStation: 'HRT',
+    // SFC destination shortcut buttons (natural ids or names).
+    sfcDestinations: [] as string[],
+    // Closes a floating ACT window when its package finishes without errors.
+    actAutoClose: true,
+    // Last COSM Edition release shown in XIT WHATSNEW.
+    lastSeenVersion: undefined as string | undefined,
+  },
+  // XIT SUPPLY: bases left out (planet natural ids) and stock kept aside at HRT per ticker.
+  supply: {
+    excluded: [] as string[],
+    reserved: {} as Record<string, number>,
+  },
+  // CONTS: hidden columns, and player name per partner company code (from FIO or typed by hand).
+  conts: {
+    hiddenColumns: [] as string[],
+    players: {} as Record<string, string>,
+    // CONTD: favorite recipients, shown first when sending a contract draft.
+    favorites: [] as string[],
+    // Contract id -> partner player name (lower case), kept so old contracts still count.
+    partnerContracts: {} as Record<string, string>,
+  },
+  govburn: {
+    planets: {} as Record<string, UserData.GovBurnPlanet>,
+    config: {
+      planets: {} as Record<string, UserData.GovBurnPlanetConfig>,
+      slots: {} as Record<string, UserData.GovBurnPlanetSlots>,
+      resupplyDays: 30,
+      red: 3,
+      yellow: 7,
+    },
+  },
+
+  // Used in user-data-migrations.ts
+  migrations: undefined,
+});
+
+export const userData = reactive({} as typeof initialUserData);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function applyUserData(newData: any) {
+  newData.balanceHistory.v1 = shallowReactive(newData.balanceHistory.v1);
+  newData.balanceHistory.v2 = shallowReactive(newData.balanceHistory.v2);
+  Object.assign(userData, newData);
+}
+
+export function applyInitialUserData() {
+  applyUserData(structuredClone(initialUserData));
+}
+
+applyInitialUserData();
+
+export function clearBalanceHistory() {
+  userData.balanceHistory.v1.length = 0;
+  userData.balanceHistory.v2.length = 0;
+}

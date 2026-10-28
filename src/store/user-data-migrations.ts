@@ -1,0 +1,250 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { migrateVersionedUserData } from '@src/store/user-data-versioned-migrations';
+import removeArrayElement from '@src/utils/remove-array-element';
+
+type Migration = [id: string, migration: (userData: any) => void];
+// A checkpoint marks that all migrations before it are applied.
+// If a user's data contains a checkpoint ID, preceding individual IDs can be pruned.
+// New checkpoints subsume older ones.
+type Checkpoint = [id: string];
+type MigrationEntry = Migration | Checkpoint;
+
+function isCheckpoint(entry: MigrationEntry): entry is Checkpoint {
+  return entry.length === 1;
+}
+
+// New migrations should be added to the top of the list.
+// The date is for reference only, and it does not affect migration order.
+const migrations: MigrationEntry[] = [
+  [
+    '26.10.2026 Add COSM Edition settings',
+    userData => {
+      userData.cosm ??= {};
+      userData.cosm.homeStation ??= 'HRT';
+      userData.cosm.sfcDestinations ??= [];
+      userData.cosm.actAutoClose ??= true;
+      userData.cosm.lastSeenVersion ??= undefined;
+    },
+  ],
+  [
+    '25.10.2026 Add CONTD favorite recipients',
+    userData => {
+      userData.conts ??= { hiddenColumns: [], players: {} };
+      userData.conts.favorites ??= [];
+      userData.conts.partnerContracts ??= {};
+    },
+  ],
+  [
+    '13.10.2026 Add CONTS columns and players',
+    userData => {
+      userData.conts ??= { hiddenColumns: [], players: {} };
+      userData.conts.hiddenColumns ??= [];
+      userData.conts.players ??= {};
+    },
+  ],
+  [
+    '11.10.2026 Add XIT SUPPLY settings',
+    userData => {
+      userData.supply ??= { excluded: [], reserved: {} };
+      userData.supply.excluded ??= [];
+      userData.supply.reserved ??= {};
+    },
+  ],
+  [
+    '15.09.2026 Add govburn data',
+    userData => {
+      userData.govburn ??= { planets: {}, config: { planets: {} } };
+      userData.govburn.config.resupplyDays ??= 30;
+      userData.govburn.config.red ??= 3;
+      userData.govburn.config.yellow ??= 7;
+      userData.govburn.config.slots ??= {};
+    },
+  ],
+  [
+    '14.09.2026 Add noBuy setting',
+    userData => {
+      userData.settings.noBuy ??= [];
+    },
+  ],
+  [
+    '12.09.2026 Add tab folders',
+    userData => {
+      userData.tabs.folders ??= [];
+    },
+  ],
+  [
+    '11.09.2026 Add XIT PLNT settings',
+    userData => {
+      userData.settings.burn.planetPickup ??= {};
+      userData.settings.repair.planetOverrides ??= {};
+      userData.settings.burn.planetResupply ??= {};
+    },
+  ],
+  [
+    '11.09.2026 Add cxmOrder setting',
+    userData => {
+      userData.settings.cxmOrder ??= ['AI1', 'CI1', 'CI2', 'IC1', 'NC1', 'NC2'];
+    },
+  ],
+  [
+    '10.09.2026 Add contextMenuExchange setting',
+    userData => {
+      userData.settings.contextMenuExchange ??= 'AI1';
+    },
+  ],
+  [
+    '25.08.2026 Add flow price overrides',
+    userData => {
+      userData.settings.flow = { overrides: {} };
+    },
+  ],
+  [
+    '19.06.2026 Remove adm-hide-inactive-buttons',
+    userData => {
+      removeFeature(userData, 'adm-hide-inactive-buttons');
+    },
+  ],
+  [
+    '11.05.2026 Rename contribution-maxed',
+    userData => {
+      renameFeature(userData, 'contribution-maxed', 'cogcu-contribution-maxed');
+    },
+  ],
+  ['10.03.2026 Checkpoint'],
+  [
+    '10.03.2026 Remove funny-rations',
+    userData => {
+      removeFeature(userData, 'funny-rations');
+    },
+  ],
+  [
+    '24.01.2026 Remove cxpc-default-1y',
+    userData => {
+      removeFeature(userData, 'cxpc-default-1y');
+    },
+  ],
+  [
+    '02.02.2026 Add full equity mode',
+    userData => {
+      userData.fullEquityMode = true;
+    },
+  ],
+  [
+    '25.12.2025 Rename features',
+    userData => {
+      renameFeature(userData, 'custom-item-sorting', 'inv-custom-item-sorting');
+      renameFeature(userData, 'item-markers', 'inv-item-markers');
+      renameFeature(userData, 'show-space-remaining', 'inv-show-space-remaining');
+    },
+  ],
+  [
+    '25.12.2025 Add audio volume',
+    userData => {
+      userData.settings.audioVolume = 0.4;
+    },
+  ],
+];
+
+function removeFeature(userData: any, feature: string) {
+  removeArrayElement(userData.settings.disabled, feature);
+}
+
+function renameFeature(userData: any, oldName: string, newName: string) {
+  const disabled = userData.settings.disabled;
+  const index = disabled.indexOf(oldName);
+  if (index !== -1) {
+    disabled[index] = newName;
+  }
+}
+
+export function migrateUserData(userData: any) {
+  // The migrations are ordered from newest to oldest, but we want to run them in order.
+  const orderedMigrations = migrations.slice().reverse();
+  if (userData.version !== undefined) {
+    migrateVersionedUserData(userData);
+    delete userData.version;
+    // After the versioned migration, we should run all the named migrations.
+    // Setting the migration list to an empty array will trigger that.
+    userData.migrations = [];
+  }
+  if (userData.migrations === undefined) {
+    // The initial user data is already migrated, so just add all migrations to the list.
+    userData.migrations = compactIds(
+      orderedMigrations,
+      orderedMigrations.map(x => x[0]),
+    );
+    return userData;
+  }
+
+  const performed = new Set<string>(userData.migrations);
+  for (let i = orderedMigrations.length - 1; i >= 0; i--) {
+    const entry = orderedMigrations[i];
+    if (isCheckpoint(entry) && performed.has(entry[0])) {
+      for (let j = 0; j < i; j++) {
+        performed.add(orderedMigrations[j][0]);
+      }
+      break;
+    }
+  }
+
+  for (const entry of orderedMigrations) {
+    const id = entry[0];
+    if (performed.has(id)) {
+      continue;
+    }
+    if (!isCheckpoint(entry)) {
+      entry[1](userData);
+    }
+    performed.add(id);
+    userData.migrations.push(id);
+  }
+
+  userData.migrations = compactIds(orderedMigrations, userData.migrations);
+  return userData;
+}
+
+function compactIds(orderedEntries: MigrationEntry[], appliedIds: string[]): string[] {
+  const applied = new Set(appliedIds);
+
+  // Find the latest checkpoint where all preceding entries are applied.
+  // An applied older checkpoint means everything before it is implicitly applied.
+  let latestCheckpointIndex = -1;
+  for (let i = orderedEntries.length - 1; i >= 0; i--) {
+    const entry = orderedEntries[i];
+    if (!isCheckpoint(entry) || !applied.has(entry[0])) {
+      continue;
+    }
+    let complete = true;
+    for (let j = i - 1; j >= 0; j--) {
+      if (isCheckpoint(orderedEntries[j]) && applied.has(orderedEntries[j][0])) {
+        break;
+      }
+      if (!applied.has(orderedEntries[j][0])) {
+        complete = false;
+        break;
+      }
+    }
+    if (complete) {
+      latestCheckpointIndex = i;
+      break;
+    }
+  }
+
+  if (latestCheckpointIndex === -1) {
+    return appliedIds;
+  }
+
+  const removable = new Set<string>();
+  for (let i = 0; i < latestCheckpointIndex; i++) {
+    removable.add(orderedEntries[i][0]);
+  }
+
+  const checkpointId = orderedEntries[latestCheckpointIndex][0];
+  const result: string[] = [checkpointId];
+  for (const id of appliedIds) {
+    if (!removable.has(id) && id !== checkpointId) {
+      result.push(id);
+    }
+  }
+  return result;
+}
