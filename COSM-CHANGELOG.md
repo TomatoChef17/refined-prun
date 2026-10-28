@@ -1,5 +1,16 @@
 # COSM Edition Changelog
 
+## 26.10.70
+
+### Changed
+
+- `XIT CONTC`: The red highlight of night deadlines is now optional, with your own quiet hours in `XIT SET` COSM. It is off by default
+- `CONTD`: The import list is now in alphabetical order
+
+### Fixed
+
+- Some tooltips used the slow browser tooltip instead of the game tooltip
+
 ## 26.10.69
 
 ### Changed

@@ -6,6 +6,8 @@ import ConditionText from '@src/features/XIT/CONTC/ConditionText.vue';
 import PrunButton from '@src/components/PrunButton.vue';
 import { isFulfillable } from '@src/core/contract-conditions';
 import { fulfillCondition } from '@src/infrastructure/prun-ui/utils/fulfill-condition';
+import { userData } from '@src/store/user-data';
+import { hhmm } from '@src/utils/format';
 
 const { deadline, contract, condition } = defineProps<{
   condition: PrunApi.ContractCondition;
@@ -18,11 +20,9 @@ function onFulfillClick(event: MouseEvent) {
   void fulfillCondition(event.currentTarget as Element, contract, condition, event.shiftKey);
 }
 
-// Deadlines are read on the computer clock, which is set to Morocco time.
-// The browser zone database puts Africa/Casablanca one hour ahead of the real clock.
-// Hours when the player sleeps: from 20:00 to 10:00.
-const SLEEP_START = 20;
-const SLEEP_END = 10;
+// Optional quiet hours (XIT SET COSM): deadlines that fall in them are shown in red,
+// because nobody is there to fulfill the condition.
+const quiet = computed(() => userData.cosm.quietHours);
 
 const end = computed(() => (isFinite(deadline) ? new Date(deadline) : undefined));
 
@@ -35,12 +35,15 @@ const endHour = computed(() => {
 });
 
 // The deadline falls in the night: nobody is there to fulfill the condition.
-const atNight = computed(
-  () =>
-    endHour.value !== undefined &&
-    deadline > timestampEachSecond.value &&
-    (endHour.value >= SLEEP_START || endHour.value < SLEEP_END),
-);
+const atNight = computed(() => {
+  const hour = endHour.value;
+  const { enabled, start, end: stop } = quiet.value;
+  if (!enabled || hour === undefined || deadline <= timestampEachSecond.value) {
+    return false;
+  }
+  // The quiet hours can cross midnight (20 to 10) or not (1 to 7).
+  return start > stop ? hour >= start || hour < stop : hour >= start && hour < stop;
+});
 
 const endTime = computed(() => {
   if (!end.value) {
@@ -51,12 +54,7 @@ const endTime = computed(() => {
     day: '2-digit',
     month: '2-digit',
   });
-  const time = end.value.toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  });
-  return `Ends: ${day.replace(',', '')} at ${time}`;
+  return `Ends: ${day.replace(',', '')} at ${hhmm(end.value)}`;
 });
 
 const eta = computed(() => {
@@ -107,7 +105,7 @@ const eta = computed(() => {
 </template>
 
 <style module>
-/* The deadline falls between 20:00 and 10:00, Morocco time. */
+/* The deadline falls in the quiet hours set in XIT SET COSM. */
 .night {
   background-color: rgba(217, 83, 79, 0.45) !important;
   color: #fff !important;

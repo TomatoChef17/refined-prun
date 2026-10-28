@@ -9,6 +9,7 @@ import SelectInput from '@src/components/forms/SelectInput.vue';
 import Commands from '@src/components/forms/Commands.vue';
 import PrunButton from '@src/components/PrunButton.vue';
 import RadioItem from '@src/components/forms/RadioItem.vue';
+import NumberInput from '@src/components/forms/NumberInput.vue';
 
 const stationOptions = homeStations.map(x => ({
   label: `${x.naturalId} – ${x.name} (${x.exchange})`,
@@ -50,6 +51,20 @@ function removeDestination(name: string) {
       label="Auto-close ACT"
       tooltip="Closes a floating action package window a moment after it finishes. It stays open after an error, a skipped step or a cancel.">
       <RadioItem v-model="userData.cosm.actAutoClose">CLOSE WHEN DONE</RadioItem>
+    </Active>
+  </form>
+  <SectionHeader>Contract Deadlines</SectionHeader>
+  <form @submit.prevent>
+    <Active
+      label="Quiet hours"
+      tooltip="XIT CONTC shows in red the deadlines that fall in these hours of your computer clock, when you cannot fulfill a condition (for example while you sleep).">
+      <RadioItem v-model="userData.cosm.quietHours.enabled">HIGHLIGHT</RadioItem>
+    </Active>
+    <Active v-if="userData.cosm.quietHours.enabled" label="From (hour)">
+      <NumberInput v-model="userData.cosm.quietHours.start" />
+    </Active>
+    <Active v-if="userData.cosm.quietHours.enabled" label="To (hour)">
+      <NumberInput v-model="userData.cosm.quietHours.end" />
     </Active>
   </form>
   <SectionHeader>SFC Destination Shortcuts</SectionHeader>

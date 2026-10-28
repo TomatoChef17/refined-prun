@@ -89,6 +89,8 @@ export const initialUserData = deepFreeze({
     sfcDestinations: [] as string[],
     // Closes a floating ACT window when its package finishes without errors.
     actAutoClose: true,
+    // XIT CONTC: deadlines in these hours (local clock) are shown in red. Off by default.
+    quietHours: { enabled: false, start: 22, end: 8 },
     // Last COSM Edition release shown in XIT WHATSNEW.
     lastSeenVersion: undefined as string | undefined,
   },

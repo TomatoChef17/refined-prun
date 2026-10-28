@@ -17,6 +17,13 @@ function isCheckpoint(entry: MigrationEntry): entry is Checkpoint {
 // The date is for reference only, and it does not affect migration order.
 const migrations: MigrationEntry[] = [
   [
+    '28.10.2026 Add COSM quiet hours',
+    userData => {
+      userData.cosm ??= {};
+      userData.cosm.quietHours ??= { enabled: false, start: 22, end: 8 };
+    },
+  ],
+  [
     '26.10.2026 Add COSM Edition settings',
     userData => {
       userData.cosm ??= {};
