@@ -1,6 +1,47 @@
-# Refined PrUn
+# Refined PrUn — COSM Fork
 
-[link-chrome]: https://chromewebstore.google.com/detail/refined-prun/coabeheneafgglpakallmkienlidgaof 'Version published on Chrome Web Store'
+This repository is the **COSM-specific fork** of the original **Refined PrUn (rPrUn)** project.
+
+## 🚀 Developer Onboarding
+
+Welcome! Before contributing, please familiarize yourself with our branching strategy, development roadmap, and contribution guidelines.
+
+### 🌿 Branching Strategy
+
+We maintain two development branches to keep general improvements separate from COSM-specific functionality:
+
+| Branch | Purpose |
+|---|---|
+| `dev` | General-purpose features and improvements applicable to the upstream Refined PrUn project. |
+| `dev-cosm` | COSM-specific features, customizations, and integrations. |
+
+**Contribution guidelines:**
+
+- **General improvements:** Fork from and submit pull requests to `dev`, rather than `dev-cosm`.
+- **COSM-specific features:** Target `dev-cosm` for functionality exclusive to COSM.
+
+Our guiding principle is to **minimize divergence between branches** to ensure long-term maintainability:
+
+1. Keep `dev` closely aligned with the upstream Refined PrUn project.
+2. Keep `dev-cosm` as close to `dev` as possible, isolating COSM-specific changes.
+
+This approach makes it easier to integrate upstream updates, reduce merge conflicts, and maintain a clean, sustainable codebase.
+
+### 📚 Getting Started
+
+Before making your first contribution, please review the following documentation:
+
+| Document | Description |
+|---|---|
+| [`docs/roadmap.md`](docs/roadmap.md) | Project roadmap, development priorities, and planned features. |
+| [`docs/contribution.md`](docs/contribution.md) | Contribution guidelines and principles inherited from the upstream project. |
+| [`docs/README.md`](docs/README.md) | Documentation index and overview of additional resources. |
+
+---
+
+**💡 Keep it upstream-friendly.** Whenever possible, design features to be reusable and compatible with the original Refined PrUn project. COSM-specific changes should remain clearly isolated to simplify future maintenance and synchronization.
+
+<!-- [link-chrome]: https://chromewebstore.google.com/detail/refined-prun/coabeheneafgglpakallmkienlidgaof 'Version published on Chrome Web Store'
 
 [link-firefox]: https://addons.mozilla.org/en-US/firefox/addon/refined-prun/ 'Version published on Mozilla Add-ons'
 
@@ -59,5 +100,5 @@ pnpm install
 pnpm build
 ```
 
-The extension will be built in the `dist` folder
+The extension will be built in the `dist` folder -->
 
