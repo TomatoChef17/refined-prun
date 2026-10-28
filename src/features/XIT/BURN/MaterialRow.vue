@@ -170,7 +170,7 @@ const hrtShort = computed(() => buyAmt.value > 0);
       </td>
     </template>
     <td v-if="show.inv">
-      <span :class="invClass" :title="invTooltip">
+      <span :class="invClass" :data-tooltip="invTooltip">
         {{ invWhole }}<span :class="$style.fraction">{{ invFraction }}</span>
       </span>
     </td>

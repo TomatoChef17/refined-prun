@@ -46,7 +46,7 @@ const tooltip = computed(() => {
 </script>
 
 <template>
-  <span :class="$style.badge" :title="tooltip">{{ label }}</span>
+  <span :class="$style.badge" :data-tooltip="tooltip">{{ label }}</span>
 </template>
 
 <style module>

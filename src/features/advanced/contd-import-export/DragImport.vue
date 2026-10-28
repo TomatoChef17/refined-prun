@@ -461,7 +461,7 @@ const focusPrompt = (el: Element | ComponentPublicInstance | null) => {
           v-for="(option, index) in options"
           :key="option.label"
           :class="$style.overlayCell"
-          :title="option.title"
+          :data-tooltip="option.title"
           @dragover="onOptionDragOver($event, index)"
           @drop="onOptionDrop($event, option)">
           <div
