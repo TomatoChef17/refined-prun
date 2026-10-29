@@ -15,17 +15,43 @@ We maintain two development branches to keep general improvements separate from 
 | `dev` | General-purpose features and improvements applicable to the upstream Refined PrUn project. |
 | `dev-cosm` | COSM-specific features, customizations, and integrations. |
 
-**Contribution guidelines:**
+**Contribution targets**
 
-- **General improvements:** Fork from and submit pull requests to `dev`, rather than `dev-cosm`.
-- **COSM-specific features:** Target `dev-cosm` for functionality exclusive to COSM.
+- **General improvements:** Fork from and submit pull requests to `dev`, not `dev-cosm`.
+- **COSM-specific features:** Target `dev-cosm` for functionality exclusive to COSM. Recommend to add cosm tag before feature name, for example `yuki/wip-cosm-punoted-auto-buy`
 
-Our guiding principle is to **minimize divergence between branches** to ensure long-term maintainability:
+**Feature branch naming and lifecycle**
+
+- Create feature work in a personal branch:
+  - `{author-id}/{optional:wip}-{feature-name}`
+  - Example: `tomato/wip-market-filters`, `moon/ui-density-tweaks`
+- Keep these feature branches after merge when the feature is still waiting for upstream adoption in official rPrUn.
+- Delete these open feature branches only after the same feature is adopted in both:
+  - Official rPrUn
+  - COSM fork (`dev` / `dev-cosm`)
+- It is recommended but not forced that you keep a clean git history with 1-feature-1-commit principle.
+
+
+
+**Maintenance ownership**
+
+- **Tomato** owns deviation control between `dev` and official rPrUn:
+  - Import official updates back into COSM when needed.
+  - Use inbound tracking branches named:
+    - `tomato/official-inbound-{feature-name}`
+  - Clean up open feature branches after adoption is complete in both repos.
+- **Yuki** and **Moon** import required, safe OOG features into `dev`:
+  - `yuki/oog-inbound-{feature-name}`
+  - `moon/oog-inbound-{feature-name}`
+
+**Guiding principle**
+
+Keep divergence low at all times:
 
 1. Keep `dev` closely aligned with the upstream Refined PrUn project.
-2. Keep `dev-cosm` as close to `dev` as possible, isolating COSM-specific changes.
+2. Keep `dev-cosm` as close to `dev` as possible, with only COSM-specific deltas.
 
-This approach makes it easier to integrate upstream updates, reduce merge conflicts, and maintain a clean, sustainable codebase.
+This process reduces merge conflicts and keeps synchronization with official rPrUn predictable.
 
 ### 📚 Getting Started
 
@@ -34,7 +60,7 @@ Before making your first contribution, please review the following documentation
 | Document | Description |
 |---|---|
 | [`docs/roadmap.md`](docs/roadmap.md) | Project roadmap, development priorities, and planned features. |
-| [`docs/contribution.md`](docs/contribution.md) | Contribution guidelines and principles inherited from the upstream project. |
+| [`docs/contributing.md`](docs/contributing.md) | Contribution guidelines and principles inherited from the upstream project. |
 | [`docs/README.md`](docs/README.md) | Documentation index and overview of additional resources. |
 
 ---
@@ -101,4 +127,3 @@ pnpm build
 ```
 
 The extension will be built in the `dist` folder -->
-
